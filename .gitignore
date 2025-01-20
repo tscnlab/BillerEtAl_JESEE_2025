@@ -36,3 +36,5 @@ rsconnect/
 RPG_ASEAN_Pre-Analysis_files
 #DS_Store
 .DS_Store
+#everything in code_review
+code_review/*
