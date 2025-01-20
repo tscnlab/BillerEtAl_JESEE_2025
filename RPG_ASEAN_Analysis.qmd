@@ -1,0 +1,3553 @@
+---
+title: "Analysis RPG ASEAN"
+author: "Anna Biller, Johannes Zauner, Christian Cajochen, Marisa A Gerle, Vineetha Kalavally, Anas Mohamed, Lukas Rottländer, Ming-Yi Seah, Oliver Stefani, Manuel Spitschan"
+format: 
+  html:
+    embed-resources: true
+    code-tools: true
+    toc: true
+    toc-depth: 4
+    number-sections: true
+---
+
+## Preface
+
+This is the analysis supplement to the publication "[*Physiologically-relevant light exposure and light behaviour in Switzerland and Malaysia*](https://doi.org/10.1101/2025.01.07.631760)", as per the [OSF Preregistration from 18 October 2024, version v1.0.1](https://osf.io/pd79m).
+
+**note: Creation of this analysis document based on its original script will fail, unless the recorded renv libraries are restored**
+
+In short, light exposure was measured in Basel, Switzerland, and Kuala Lumpur, Malaysia, for one month in 20 individuals per site.
+Additionally, questionnaires on sleep (PSQI) and light exposure behaviour ([LEBA](https://leba-instrument.org)) were collected at specified times.
+The following hypotheses and research questions were formulated.
+
+### Research questions
+
+-   **RQ 1**: Are there differences in objectively measured light exposure between the two sites, and if so, in which light metrics?
+
+-   **RQ 2**: Are there differences in self-reported light exposure patterns using LEBA across time or between the two sites, and if so, in which questions/scores?
+
+-   **RQ 3** In general, how are light exposure and LEBA related and are there differences in this relationship between the two sites?
+
+### Hypotheses
+
+For **RQ 1**, the following hypotheses will be addressed:
+
+-   **$H1$**: There are differences in light logger-derived light exposure intensity levels and duration of intensity between Malaysia and Switzerland.
+
+-   **$H0_1$** : No differences between Malaysia and Switzerland.
+
+-   **$H2$**: There are differences in light logger-derived timing of light exposure between Malaysia and Switzerland.
+
+-   **$H0_2$**: No differences between Malaysia and Switzerland.
+
+For **RQ 2**, the following hypotheses will be addressed: 
+
+-   **$H3$**: There are differences in LEBA items and factors between Malaysia and Switzerland.
+
+-   **$H0_3$**: No differences between Malaysia and Switzerland.
+
+-   **$H4$**: LEBA scores vary over time within participants.
+
+-   **$H0_4$**: No differences between Malaysia and Switzerland.
+
+For **RQ 3**, the following hypotheses will be addressed:
+
+-   **$H5$**: LEBA items correlate with preselected light-logger derived light exposure variables.
+
+-   **$H0_5$**: No correlation.
+
+-   **$H6$**: There is a difference between Malaysia and Switzerland on how well light-logger derived light exposure variables correlate with subjective LEBA items.
+
+-   **$H0_6$**: No differences between Malaysia and Switzerland.
+
+## Summary
+
+This analysis shows several key differences and similarities between the two sites, Malaysia and Switzerland. 
+
+-   **$H1$**: Swiss participants had significantly more time in daylight levels (above 1000 lx mel EDI) compared to Malaysian participants, and overall also stayed longer in healthy light levels during the day (above 250 lx mel EDI). While the photoperiod was longer in Switzerland than in Malaysia, this difference is still significant when adjusting for photoperiod, where the (unstandardized) effect size is almost a factor of two.
+
+-   **$H2$**: The brightest time of day was significantly brighter for Swiss participants compared to Malaysian participants, with a difference of about 0.5 log 10 units. The last time of day with light exposure was also significantly later in Switzerland compared to Malaysia, by about 1.5 hours, which can at least partly be attributed to the longer photoperiod. Swiss participants do, however, also avoid light exposure above 10 lx mel EDI significantly earlier than Malaysian participants, by about 1 hour and 10 minutes. Additionally, Swiss participants average about 1 log 10 unit mel EDI lower during evenings, compared to Malaysia. Finally, Swiss participants are about twice as often in a period of light above 250 lx mel EDI during the day.
+
+-   **$H3$**: LEBA questions and factors do not show a significant difference between Malaysia and Switzerland
+
+-   **$H4$**: Scores for most of the LEBA items are very stable over time. All 23 questions and 1 out of 5 factors do not vary significantly in more than 50% of participants.
+
+-   **$H5$**: LEBA items correlate with preselected light-logger derived light exposure variables in the Switzerland site, but not Malaysia. While exploratory analysis shows correlations in both sites, only Switzerland shows significant correlations after correction for multiple testing. Out of 84 correlations, 10 are significant in Switzerland. The effect size of those correlations is medium on average (r = 0.39).
+
+-   **$H6$**: There are few LEBA questions  where the correlation coefficient differs significantly between sites. Specifically, these are the questions "I dim my mobile phone screen within 1 hour before attempting to fall asleep" & "I dim my computer screen within 1 hour before attempting to fall asleep". While the correlation is positive with preselected light exposure metrics in Malaysia (r= 0.25, both), it is zero or negative in Switzerland (r = -0.01 and -0.15, respectively).
+
+## Setup
+
+Data analysis is performed in `R` statistical software, mainly using the [`LightLogR`](https://tscnlab.github.io/LightLogR/) R package, which is developed as part of the [MeLiDos](www.melidos.eu) project. The document is rendered to HTML via [Quarto](https://quarto.org/).
+
+The following packages are used for analysis
+
+```{r}
+#| output: false
+#| label: setup
+
+#collect all the packages that are needed for the analysis
+packages <- c("quarto", "tidyverse", "cowplot", "gt", "gtsummary", 
+              "patchwork", "readxl", "ggsci", "ggcorrplot", "LightLogR",
+              "rlang", "suntools", "lme4", "lmerTest", "broom.mixed",
+              "DescTools", "lattice", "magrittr", "mgcv", "itsadug",
+              "labelled", "ordinal", "ggtext", "cowplot", "magick", "ggh4x",
+              "rnaturalearthdata")
+
+#check if packages are installed, if not install them
+if(!require(pacman)) {
+  install.packages("pacman") 
+  library(pacman)
+}
+
+p_load(packages, character.only = TRUE)
+
+#source functions
+source("functions/missing_data_table.R")
+source("functions/data_sufficient.R")
+source("functions/Photoperiod.R")
+source("functions/table_lmer.R")
+source("functions/Inf_plots.R")
+source("functions/inference.R")
+source("functions/inference_table.R")
+
+#setting a seed for the date of generation to ensure reproducibility of random processes
+seed <- 20241105
+
+#if OpenMP is supported by the executing machine, analysis times for Research Question 2, Hypothesis 2, Patterns, can be sped up dramatically. If not supported, however, it distorts results dramatically and should not be used.
+OpenMP_support <- TRUE
+
+```
+
+### Global parameters
+
+Here we set global parameters for the analysis. Except for the seed, these are specified in the preregistration document.
+
+#### Coordinates and timezones of the sites
+
+Coordinates are specified as latitude and longitude in decimal degrees. Timezones are chosen from the `OlsonNames()` function.
+
+```{r global parameters}
+coordinates <- list(
+#Basel Switzerland, University of Basel
+malaysia = c(101.6009, 3.0650),
+#Kuala Lumpur Malaysia, Monash University
+switzerland = c(7.5839, 47.5585)
+)
+
+tzs <- list(
+  malaysia = "Asia/Kuala_Lumpur",
+  switzerland = "Europe/Zurich")
+```
+
+#### Illuminance threshold
+
+The upper measurement threshold is set to 130,000 lx. While a lower threshold of 1 lx is specified in the preregistration, it will not be applied in the analysis, as variances of light levels below 1 lx are not relevant for the analysis parameters.
+
+```{r illuminance threshold}
+
+#set a maximum illuminance threshold in lx that is acceptable for the sensor values
+illuminance_upper_th <- 1.3*10^5
+
+```
+
+#### Random metrics for the sensitivity analysis
+
+The preregistration document specifies the procedure to define a threshold of missing data through a sensitivity analysis, based on three random metrics. These are defined here. The metrics are taken from Table 5 in the preregistration document with the exception of Interdaily Stability (IS), which cannot be calculated on a daily basis as the others.
+
+```{r random metrics}
+#choosing three random metrics. This was the original script used to determine the metrics
+# metrics <- c("TAT 250", "TAT 1000", "Period above 1000 lx", "M10m", "L5m", "IV", "LLiT 10", "LLit 250", "Frequency crossing threshold", "FLiT 1000", "LE", "M/P ratio")
+# 
+# metrics_sample <- 
+#   sample(metrics, 3)
+metrics_sample <- c("Llit 10","M/P ratio", "IV")
+
+```
+
+
+## Import
+
+### Loading data in
+
+:::: panel-tabset
+
+### Malaysia data
+
+#### Import light exposure data
+
+The data sits in a folder structure that is organized by country and participant ID.
+Only `.csv` files that do not contain `qualtrics` in their file name from the subfolder `Malaysia/` are imported.
+The data is imported using the `Speccy` import function of the `LightLogR` package, as this is the device used.
+The function automatically detects the participant ID from the file name.
+The timezone set is for **Malaysia**.
+
+*Note: Participant MY006 is missing from the data, as this participant lost the measurement device*
+
+```{r import malaysia}
+#get all files in the Input/Malaysia folder that is inside a subfolder "MY001" to "MY020" and that does not contain "qualtrics" in the file name
+base_folder <- "data/Malaysia"
+ids <- sprintf("MY%03d", c(1:5, 7:20))
+pattern <- "^(?!.*qualtrics).*\\.csv$"
+all_folders <- file.path(base_folder, ids)
+csv_files <- 
+  list.files(
+    path = all_folders, pattern = "\\.csv$", full.names = TRUE, recursive = TRUE
+    )
+csv_files <- csv_files[!str_detect(csv_files, "qualtrics")]
+id.pattern <- "MY[0-9]{3}"
+
+#Import the data
+data_malaysia <- 
+  import$Speccy(csv_files, tz = tzs[["malaysia"]], auto.id = id.pattern)
+
+#renaming the wavelength columns
+data_malaysia <- 
+  data_malaysia %>% 
+  rename_with(\(x) {
+    paste0("WL_", x) %>% str_replace("[.][.][.]", "")
+  }, 
+  `...380`:`...780`
+  )
+```
+
+#### Missing data
+
+The summary shows that all data were collected approximately at the same time, and about half of them are without gaps.
+The next section will make implicit gaps explicit. This will be done by creating a regular time series from first until last day of measurement. Minutes without an observation will be filled with `NA`.
+
+```{r malaysia missing data}
+#check for gaps (implicit missing data)
+data_malaysia %>% gap_finder()
+#confirm that the regular epoch is 1 minute
+data_malaysia %>% dominant_epoch()
+#bring data into a regular time series of 1 minute
+data_malaysia_temp <- 
+  data_malaysia %>% mutate(Datetime = round_date(Datetime, "1 minute"))
+#check that no Datetime is present twice after rounding
+stopifnot("At least one datetime is present twice after rounding" = 
+            data_malaysia_temp$Datetime %>% length() %>% {. == nrow(data_malaysia)}
+          )
+
+#show a summary of implicitly missing data
+implicitly_missing_summary(data_malaysia_temp, 
+                           "Implicitly missing data in the Malaysia dataset", 60)
+
+#make implicit gaps explicit
+data_malaysia <- data_malaysia_temp %>% gap_handler(full.days = TRUE)
+#check for gaps
+data_malaysia %>% gap_finder()
+#remove the temporary dataframe
+rm(data_malaysia_temp)
+
+#show values above the photopic illuminance thresholds
+data_malaysia %>% 
+  filter(Photopic.lux > illuminance_upper_th) %>% 
+  select(Id, Datetime, Photopic.lux, MEDI) %>% 
+  gt(caption = 
+       paste("Values above", illuminance_upper_th, "lx photopic illuminance"))
+
+#apply the filter for the upper illuminance threshold
+data_malaysia <-
+data_malaysia %>% 
+  filter(Photopic.lux <= illuminance_upper_th | is.na(Photopic.lux)) %>% 
+  gap_handler()
+
+#set illuminance values to 0.1 if they are below 1 lux (as the sensor does not measure below 1 lux, but 0.1 lx can be logarithmically transformed)
+data_malaysia <- 
+  data_malaysia %>% 
+  mutate(MEDI = ifelse(Photopic.lux < 1, 0.1, MEDI))
+
+#show a summary of data missing in general
+data_malaysia %>% filter(!is.na(MEDI)) %>% 
+  implicitly_missing_summary( 
+                           "Missing data in the Malaysia dataset overall", 
+                           60)
+
+```
+
+#### Import LEBA data
+
+In this section the LEBA data is imported. The data is stored in a `MYXXX_qualtrics.csv` file within each participant's folder. It contains questionnaire data. Days are coded 1 to X (X being the last day), so the dates need to be connected with the dates from the light data. 
+
+```{r}
+#Import the data
+leba_folders <- file.path(base_folder, ids)
+pattern <- "qualtrics\\.csv$"
+leba_files <- 
+  list.files(path = leba_folders, pattern = pattern, full.names = TRUE)
+
+leba_malaysia <- 
+  read_csv(leba_files, id = "file.path") %>% 
+  mutate(Id = str_extract(file.path, id.pattern) %>% as.factor(),
+         Day = parse_number(`...1`)
+         ) %>% 
+  select(Id, Day, starts_with("leba"))
+
+#extract the questions from the data
+leba_questions <- leba_malaysia[1,-c(1,2)] %>% unlist()
+
+#set the factor levels for leba
+leba_levels <- c("Never", "Rarely", "Sometimes", "Often", "Always")
+
+#drop the first row and set the factor levels
+leba_malaysia <- 
+  leba_malaysia %>%
+  drop_na(Day) %>% 
+  mutate(across(starts_with("leba"), ~ factor(.x, levels = leba_levels)))
+
+#drop rows with NA
+leba_malaysia <- leba_malaysia %>% drop_na()
+
+#set variable labels
+var_label(leba_malaysia) <- leba_questions %>% as.list()
+
+```
+
+### Switzerland data
+
+#### Import light exposure data
+
+The Swiss data are structured by participant folders, with one or more `.csv` files by participant.
+
+```{r import switzerland data}
+#get all files in the data/Basel/Speccy folder that is inside a subfolder "ID01" to "ID20" and in those a .csv file
+base_folder <- "data/Basel/Speccy"
+subfolders <- sprintf("ID%02d", 1:20)
+pattern <- "\\.csv$"
+all_folders <- file.path(base_folder, subfolders)
+csv_files <- list.files(path = all_folders, pattern = pattern, full.names = TRUE, recursive = TRUE)
+id.pattern <- "ID\\d{2}"
+
+#Import the data
+data_switzerland <- import$Speccy(csv_files, tz = tzs[["switzerland"]], auto.id = id.pattern)
+
+#renaming the wavelength columns
+data_switzerland <- 
+  data_switzerland %>% 
+  rename_with(\(x) {
+    paste0("WL_", x) %>% str_replace("[.][.][.]", "")
+  }, 
+  `...380`:`...780`
+  )
+
+```
+
+#### Missing data
+
+The overview suggests there is implicit missing data, which will be cleaned the following way:
+
+```{r switzerland missing data}
+
+#check for gaps (implicit missing data)
+data_switzerland %>% gap_finder()
+#confirm that the regular epoch is 1 minute
+data_switzerland %>% dominant_epoch()
+#bring data into a regular time series of 1 minute
+data_switzerland_temp <- 
+  data_switzerland %>% mutate(Datetime = round_date(Datetime, "1 minute"))
+#check that no Datetime is present twice after rounding
+stopifnot("At least one datetime is present twice after rounding" = 
+            data_switzerland_temp$Datetime %>% length() %>% {. == nrow(data_switzerland)}
+          )
+
+#show a summary of implicitly missing data
+implicitly_missing_summary(data_switzerland_temp, 
+                           "Implicitly missing data in the Swiss dataset", 60)
+
+#make implicit gaps explicit
+data_switzerland <- data_switzerland_temp %>% gap_handler(full.days = TRUE)
+#check for gaps
+data_switzerland %>% gap_finder()
+#remove the temporary dataframe
+rm(data_switzerland_temp)
+
+#show values above the photopic illuminance thresholds
+data_switzerland %>% 
+  filter(Photopic.lux > illuminance_upper_th) %>% 
+  select(Id, Datetime, Photopic.lux, MEDI) %>% 
+  gt(caption = 
+       paste("Values above", illuminance_upper_th, "lx photopic illuminance"))
+
+#apply the filter for the upper illuminance threshold
+data_switzerland <-
+data_switzerland %>% 
+  filter(Photopic.lux <= illuminance_upper_th | is.na(Photopic.lux)) %>% 
+  gap_handler()
+
+#set illuminance values to 0.1 if they are below 1 lux (as the sensor does not measure below 1 lux, but 0.1 lx can be logarithmically transformed)
+data_switzerland <- 
+  data_switzerland %>% 
+  mutate(MEDI = ifelse(Photopic.lux < 1, 0.1, MEDI))
+
+#show a summary of data missing in general
+data_switzerland %>% filter(!is.na(MEDI)) %>% 
+  implicitly_missing_summary( 
+                           "Missing data in the Swiss dataset overall", 
+                           60)
+
+```
+
+#### Import LEBA data
+
+In this section the LEBA data is imported. The data is stored in the `REDCap_CajochenASEAN_DATA_2023-10-30_1215.csv` file in the `REDCap` folder. It contains questionnaire data. Days are coded 1 to X (X being the last day), so the dates need to be connected with the dates from the light data. 
+
+The basel data also contains more columns coded with `leba` than the Malaysia data. Only the ones contained in both locations will be chosen.
+
+
+```{r}
+#Import the data
+leba_folders <- "data/Basel/REDCap"
+leba_file <- "REDCap_CajochenASEAN_DATA_2023-10-30_1215.csv"
+leba_files <- paste(leba_folders, leba_file, sep = "/")
+
+leba_switzerland <- 
+  read_csv(leba_files, id = "file.path") %>% 
+  mutate(Day = parse_number(redcap_event_name)) %>% 
+  fill(code) %>% 
+  select(Id = code, Day, starts_with("leba"))
+
+#replace the small factor f to an uppercase F
+names(leba_switzerland) <- 
+names(leba_switzerland) %>% str_replace_all("f(\\d)", "F\\1")
+
+#set the factor levels for leba
+leba_levels <- c("Never", "Rarely", "Sometimes", "Often", "Always")
+
+#get the column names
+colnames_leba <- names(leba_questions)
+
+#merge the columns with the same name, where one ends with _2, unite the dates
+leba_switzerland <- 
+  colnames_leba %>% 
+  reduce(
+    \(y,x) 
+    y %>% 
+      unite(
+        col = !!x, 
+        matches(x), matches(paste0(x, "_2")),
+        na.rm = TRUE
+        ),
+    .init = leba_switzerland
+    ) %>% 
+  unite(col = Datetime, 
+        leba_weekly_timestamp, leba_end_timestamp, 
+        na.rm = TRUE) %>% 
+  select(Id, Day, Datetime, starts_with("leba_f")) %>%
+  mutate(across(starts_with("leba"),
+           ~ factor(.x, levels = 1:5, labels = leba_levels))) %>% 
+  drop_na()
+
+#set variable labels
+var_label(leba_switzerland) <- leba_questions %>% as.list()
+
+```
+
+As the codes in REDCap and the Ids in the light data do not match, we need to enlist a conversion table.
+
+```{r}
+file_conv <- "data/Basel/Participant List Anonymised.xlsx"
+#import the conversion file
+conv_switzerland <- 
+  read_xlsx(file_conv) %>% 
+  select(ID, Code) %>% 
+  mutate(ID = sprintf("ID%02d", ID))
+
+#one Id in the conversion file does not match with a code in the Leba data
+# conversion file: 1998NABR
+# leba data: 1999NABR
+# we correct the conversion file according to the leba data
+conv_switzerland <- 
+  conv_switzerland %>% 
+  mutate(Code = if_else(Code == "1998NABR", "1999NABR", Code))
+
+#add the conversion table to the leba data
+leba_switzerland <- 
+  leba_switzerland %>% 
+  left_join(conv_switzerland, by = c("Id" = "Code")) %>% 
+  select(-Id) %>% 
+  rename(Id = ID) %>% 
+  drop_na(starts_with("leba")) %>% 
+  dplyr::relocate(Id, .before = 1)
+
+```
+
+::::
+
+#### Determining the cutoff for required data of participant-days {#sec-threshold}
+
+Each participant-day is required to have at least a set number of datapoints or it will be excluded from the analysis. The procedure on how to determine this cutoff is described in the preregistration document. Data will be aggregated to hourly values and threshold values in 1 hour instances tested, i.e. 1/24 of a day. The minimum threshold is set to 3/24, as calculating the IV requires 3 data points. Participants `MY004`, `MY009`, and `MY012` were chosen randomly to determine the threshold.
+
+This section took about 40 hrs compute time on a M2 Macbook Pro, 64 GB RAM. Thus for normal execution, bootstrapped results are stored in `data/processed`, and only analysed here.
+
+```{r random participants}
+#choosing three participants without missing data. 
+
+# n_participants <- 3
+# 
+# coverage <- 
+# data_malaysia %>% filter(!is.na(MEDI)) %>%
+#     summarize(
+#       length_no_complete = length(Datetime),
+#       length_days = length_no_complete/60/24
+#     )
+# 
+# random_participants <- 
+# suppressWarnings({
+#   data_malaysia %>% 
+#     filter(!is.na(MEDI)) %>% 
+#     gap_finder(gap.data = TRUE, silent = TRUE) %>% 
+#         group_by(Id, .drop = FALSE) %>% 
+#         summarise(gaps = max(gap.id)
+#         ) %>% 
+#         mutate(gaps = ifelse(gaps == -Inf, 0, gaps)) 
+#     }) %>% 
+#   left_join(coverage, by = "Id") %>% 
+#   filter(gaps == 0 & length_days >=29) %>% 
+#   slice_sample(n = n_participants) %>% 
+#   pull(Id)
+
+random_participants <- c("MY004", "MY009", "MY012")
+
+```
+
+The chosen metrics are `{r} metrics_sample`, the chosen participants are `{r} random_participants`.
+
+##### Calculating metrics
+
+```{r metrics for random participants}
+#filter the dataset
+subset_malaysia <- 
+  data_malaysia %>% 
+  filter(Id %in% random_participants)
+
+#remove the (incomplete) first and last day of measurement
+subset_malaysia <- 
+  subset_malaysia %>% 
+  aggregate_Datetime(unit = "1 hour") %>% 
+  mutate(Day = date(Datetime)) %>%
+  filter_Datetime(filter.expr = 
+                    Day > min(Day) & Day < (max(Day)-days(1)))
+
+subset_malaysia %>% gg_overview()
+
+#metrics function
+metrics_function <- function(dataset) {
+  dataset %>% 
+    summarize(
+    MP_ratio = mean(MEDI)/mean(Photopic.lux),
+            LLiT10 =
+              timing_above_threshold(
+              MEDI, Datetime, "below", 10, as.df = TRUE),
+            IV = intradaily_variability(MEDI, Datetime),
+            .groups = "drop_last"
+            ) %>% 
+  unnest_wider(col = c(LLiT10)) %>%
+  select(-first_timing_below_10, -mean_timing_below_10) %>% 
+    mutate(last_timing_below_10 = 
+             hms::as_hms(last_timing_below_10) %>% as.numeric)
+  }
+
+# calculate the metrics
+subset_metrics <-
+  subset_malaysia %>%
+  group_by(Day, .add = TRUE) %>%
+  metrics_function() %>% 
+      pivot_longer(
+        cols = -c(Day, Id), names_to = "metric", values_to = "value") %>% 
+  group_by(metric, Id) %>% 
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE),
+    se = sd/sqrt(n()-1),
+    qlower = quantile(value, 0.4, na.rm = TRUE),
+    qupper = quantile(value, 0.6, na.rm = TRUE),
+    upper_Acc = max(value, na.rm = TRUE),
+    lower_Acc = min(value, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+##### creating bootstraps
+
+```{r bootstrap basis}
+#for each participant-day, remove the specified number of datapoints
+#and calculate the metrics
+bootstrap_basis <- 
+  subset_malaysia %>% 
+  group_by(Id, Day) %>% 
+  select(Id, Day, Datetime, MEDI, Photopic.lux)
+
+```
+
+```{r bootstrap}
+#thresholds for the bootstrapping
+n_bootstraps <- 2
+thresholds <- seq(1, 21, by = 1)
+
+#create the bootstraps
+
+#this is commented out in production, because the process takes about 40+ hours of compute-time
+
+#creating 5000 files with 2 bootstraps each
+# (1:(0.5*10^4)) %>% walk(\(x) {
+# 
+#   bootstraps <-
+#   tibble(
+#     threshold = rep(thresholds, each = n_bootstraps),
+#     bootstrap_id = seq_along(threshold),
+#          data =
+#            threshold %>% map(\(x) bootstrap_basis %>% slice_sample(n = 24-x))
+#   ) %>%
+#   unnest(data) %>%
+#   group_by(threshold, bootstrap_id, Id, Day) %>%
+#   arrange(Datetime, .by_group = TRUE) %>%
+#   metrics_function() %>%
+#   pivot_longer(cols = -c(threshold, bootstrap_id, Id, Day), names_to = "metric", values_to = "value")
+# #
+# #save these to disk
+# save(bootstraps, file = sprintf("data/processed/bootstrap%04d.RData", x))
+# 
+# })
+```
+
+
+```{r bootstrap2}
+#then bring the bootstraps together to one file
+
+# bootdata <- tibble()
+
+# walk(1:5000, \(x) {
+#   load(sprintf("data/processed/bootstrap%04d.RData", x))
+#   bootdata <<- bind_rows(bootdata, bootstraps)
+# })
+
+# bootstraps <- bootdata
+# save(bootstraps, file = "data/processed/bootstraps.RData")
+```
+
+
+```{r bootstrap3}
+#bootstrap condensation
+# source("scripts/bootstrap_condensation.R")
+```
+
+
+```{r bootstrap4}
+#if previous chunks for bootstrapping are executed, comment this chunk out
+load(file = "data/processed/bootstraps.RData")
+
+```
+
+```{r visualizing bootstrap results}
+#| fig-cap: Summmary of the bootstraping procedure to determine an acceptable threshold of daily missing data. The blue horizontal line shows the average value of data across the full dataset, the blue rectangle a 95% confidence interval around that average. Dots show the average value across all bootstraps of that respective threshold value. A blue dot indicates that all 10^4 bootstraps lie within the 95% confidence interval of the full dataset. A red dot indicates that at least one bootstrap lies outside of the 95% confidence interval.
+
+#the bootstraps are now summarized at the metric per participant level for each threshold. These are compared to the original metrics and their bounds. bootstrap condensation in the script "scripts/bootstrap_condensation.R"
+bootstrap_comparison <-
+bootstraps %>%
+  left_join(subset_metrics, by = c("Id", "metric"))
+
+#visualize the results
+bootstrap_comparison %>%
+  ggplot(aes(x = threshold)) +
+    geom_ribbon(aes(ymin = (mean - 2*se), ymax = (mean + 2*se)), 
+                fill = "steelblue", alpha = 0.4) +
+  geom_hline(data = subset_metrics, aes(yintercept=mean), color = "steelblue") +
+  geom_errorbar(
+    aes(ymin = lower_bs1, ymax = upper_bs1), linewidth = 0.5, width = 0) +
+  geom_errorbar(aes(ymin = lower_bs2, ymax = upper_bs2), 
+                linewidth = 0.25, width = 0) +
+  geom_point(aes(y=mean_bs, 
+                 col = ((mean - 2*se) <= lower_bs3 & upper_bs3 <= (mean + 2*se)))) +
+  facet_wrap(Id~metric, scales = "free") +
+  theme_minimal() +
+  labs(x = "Hours missing from the day (Threshold)", y = "Metric value", col = "Within Range") +
+  theme(legend.position = "bottom")
+
+```
+
+The most conservative threshold is chosen based on participant `MY009` and the metric `last_timing_below_10`, which allows up to 6 hours of missing data per day, i.e. `{r} gt::vec_fmt_percent(6/24)`. For this assumption to hold, the data must be missing at random hours of the day.
+
+```{r missing threshold}
+missing_threshold <- 18/24
+```
+
+#### Remove participant-days with insufficient data
+
+The threshold determined in @sec-threshold is used to remove participant-days with insufficient data.
+
+:::: panel-tabset
+
+##### Malaysia
+
+```{r malaysia remove insufficient data}
+
+#mark data that is above the upper illuminance threshold
+data_malaysia <- 
+  data_malaysia %>% 
+  group_by(Day = date(Datetime), .add = TRUE) %>%
+    mutate(marked_for_removal = 
+             !data_sufficient(MEDI, missing_threshold),
+           .before = 1
+          ) %>% 
+  ungroup(Day)
+
+#display the final malaysia dataset prior to analysis, where each dot marks the start/end of a day
+data_malaysia %>% 
+  filter(!marked_for_removal) %>% 
+  group_by(Day, .add = TRUE) %>%  
+  gg_overview()
+
+```
+
+##### Switzerland
+
+```{r switzerland remove insufficient data}
+
+#mark data that is above the upper illuminance threshold
+data_switzerland <- 
+  data_switzerland %>% 
+  group_by(Day = date(Datetime), .add = TRUE) %>%
+    mutate(marked_for_removal = 
+             !data_sufficient(MEDI, missing_threshold),
+           .before = 1
+          ) %>% 
+  ungroup(Day)
+
+#display the final malaysia dataset prior to analysis, where each dot marks the start/end of a day
+data_switzerland %>% 
+  filter(!marked_for_removal) %>% 
+  group_by(Day, .add = TRUE) %>%  
+  gg_overview()
+
+```
+
+::::
+
+```{r malaysia average day}
+#visualize the data as a doubleplot of an average day
+data_malaysia %>% 
+  filter(!marked_for_removal) %>% 
+  ungroup() %>% 
+  aggregate_Date(numeric.handler = \(x) mean(x, na.rm = TRUE)) %>% 
+  gg_doubleplot(fill = pal_jco()(1))
+
+```
+
+```{r switzerland average day}
+#visualize the data as a doubleplot of an average day
+data_switzerland %>% 
+  filter(!marked_for_removal) %>% 
+  ungroup() %>% 
+  aggregate_Date(numeric.handler = \(x) mean(x, na.rm = TRUE)) %>% 
+  gg_doubleplot()
+
+# ggsave("figures/average_day_basel.pdf", height = 27)
+
+```
+
+ ### Combine datasets and descriptives
+
+The datasets are combined into one dataset for further analysis.
+
+::: panel-tabset
+
+#### Light exposure data
+
+```{r combine light}
+#combine the light exposure data
+data <- list(malaysia = data_malaysia %>% filter(!marked_for_removal), 
+             switzerland = data_switzerland %>% filter(!marked_for_removal))
+
+descriptive <- 
+data %>% map(\(x) {
+  x %>% tbl_summary(include = c(MEDI),
+                              by = Id,
+                              missing_text = "Missing",
+                              statistic = list(
+                                               MEDI ~ "{mean} ({min}, {max})")
+                              )
+})
+
+descriptive[[1]]
+descriptive[[2]]
+
+```
+
+
+#### LEBA data
+
+```{r combine leba}
+
+#combine the leba data
+leba_data <- list(malaysia = leba_malaysia, switzerland = leba_switzerland)
+leba_data_combined <- leba_data %>% list_rbind(names_to = "site")
+var_label(leba_data_combined) <- leba_questions %>% as.list()
+
+#histogram summary
+leba_data_combined %>% 
+  pivot_longer(cols = -c(site, Id, Day, Datetime), 
+               names_to = "item", values_to = "value") %>% 
+  group_by(site, item) %>% 
+  nest() %>% 
+  ungroup() %>% 
+  mutate(question = rep(leba_questions, 2)) %>% 
+  unnest_wider(data) %>% 
+  select(-c(Id,Day, Datetime)) %>% 
+  mutate(value = map(value, \(x) x %>% as.numeric() %>% hist(breaks = (0.5+0:5), plot = FALSE) %>% .$counts)) %>% 
+  pivot_wider(id_cols = c(question, item), names_from = site, values_from = value) %>% 
+  gt() %>% 
+  cols_nanoplot(new_col_name = "Malaysia", 
+                columns = c(malaysia), plot_type = "bar",
+                options = nanoplot_options(
+                  data_bar_fill_color = pal_jco()(1),
+                  data_bar_stroke_color = pal_jco()(1)
+                )) %>% 
+  cols_nanoplot(new_col_name = "Switzerland", 
+                columns = c(switzerland), plot_type = "bar",
+                options = nanoplot_options(
+                  data_bar_fill_color = pal_jco()(2)[2],
+                  data_bar_stroke_color = pal_jco()(2)[2]
+                )) %>% 
+  cols_label(question = "LEBA Item", 
+             item = "Item coding")
+
+#numeric summary plot
+leba_data_combined %>% 
+  tbl_summary(include = -c(Id, Day, Datetime), by = site)
+
+```
+
+:::
+
+
+### Calculate the photoperiod
+
+In this section, the dataset is extended by by a column indicating one of three states of the day: `day`, `evening`, and `night`. The states are determined by the photoperiod of the location of the data collection. `day` is defined as the time between sunrise (dawn) and sunset (dusk), `evening` as the time between sunset and the midnight, and `night` as the time between midnight and sunrise. Midnight is chosen as a somewhat arbitrary differentiator between states, as sleep timing is not available in the dataset or auxiliary data collection.
+
+```{r photoperiod}
+#| fig-height: 8
+
+#extract the days for the data collection
+relevant_days <- 
+  data %>% 
+  map(~ .x %>% ungroup() %>% pull(Day) %>% unique)
+
+#calculate sunrise and sunset times for the location of the data collection
+photoperiods <- 
+  names(data) %>% 
+  rlang::set_names() %>% 
+  map(\(x) {
+        photoperiod(coordinates[[x]], relevant_days[[x]], tz = tzs[[x]])
+  })
+
+#add the photoperiod to the data
+data <- 
+  data %>% 
+  map2(photoperiods, ~ left_join(.x, .y, by = c("Day" = "date")))
+
+#set categories for the photoperiod
+data <- 
+  data %>%
+  map(\(x) {
+    x %>% 
+      group_by(Day, .add = TRUE) %>%
+      mutate(Photoperiod = case_when(
+        Datetime < dawn ~ "night",
+        Datetime < dusk ~ "day",
+        Datetime >= dusk ~ "evening"),
+        photoperiod_duration = sum(Photoperiod == "day")/60
+      ) %>% 
+      ungroup(Day)
+  })
+
+#display an exemplary week with photoperiods
+
+data %>% 
+  map2(c("MY001", "ID01"), \(x,y) {
+    x %>% 
+  filter(!marked_for_removal) %>%
+  filter(Id == y) %>% 
+  filter_Date(length = "1 week") %>% 
+  gg_day(geom = "ribbon", alpha = 0.5, col = "black", aes_fill = Id) + 
+  geom_rect(data = \(x) x %>% summarize(dawn = mean(hms::as_hms(dawn)), 
+                                         dusk = mean(hms::as_hms(dusk))), 
+   aes(xmin = 0, xmax = dawn, ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  geom_rect(data = \(x) x %>% summarize(dawn = mean(hms::as_hms(dawn)), 
+                                         dusk = mean(hms::as_hms(dusk))), 
+   aes(xmin = dusk, xmax = 24*60*60, ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  theme(legend.position = "none")+
+  labs(title = paste0("Example week with photoperiod for participant ", y))
+
+  })
+
+```
+
+The dataset spans a period of `{r} length(relevant_days$malaysia)` days in Malaysia and `{r} length(relevant_days$switzerland)` days in Switzerland.
+
+## Inferential Analysis
+
+### Photoperiod duration
+
+```{r photoperiod duration}
+photoperiods <- 
+data %>% list_rbind(names_to = "site") %>% 
+  group_by(site, Day, photoperiod_duration) %>% 
+  summarize(.groups = "drop")
+
+t.test(photoperiod_duration ~ site, data = photoperiods)
+
+```
+Photoperiods are significantly different between sites. Thus applicable
+metrics will be corrected by duration of photoperiod (cd). In the case of evening or night data (e.g., TBTe10), correction will be done on their respective duration. This was not specified in the preregistration document.
+
+### Research Question 1
+
+**RQ 1**: Are there differences in objectively measured light exposure between the two sites, and if so, in which light metrics?
+
+#### Hypothesis 1
+
+**$H1$**: There are differences in light logger-derived light exposure intensity levels and duration of intensity between Malaysia and Switzerland.
+
+##### Metric calculation
+
+In this section, metrics will be calculated for the light exposure data.
+
+The metrics are as follows:
+
+*H1*:
+
+-   Time above Threshold 250 lx mel EDI (TAT250)
+
+-   Time above Threshold 1000 lx mel EDI (TAT1000)
+
+-   Period above Threshold 1000 lx mel EDI (PAT1000)
+
+-   Time above Threshold 250 lx mel EDI during daytime hours (TATd250)
+
+-   Time below Threshold 10 lx mel EDI during evening hours (TBTe10)
+
+```{r metrics calculation H1}
+#| warning: false
+
+metric_selection <- list(
+  H1 = c("TAT250", "TAT1000", "PAT1000", "TATd250", "TBTe10")
+)
+
+p_adjustment <- list(
+  H1 = 5
+)
+
+metrics <- 
+  data %>% 
+  map(
+    \(x) {
+      #whole-day metrics
+      whole_day <-
+      x %>%
+        group_by(Id, Day) %>%
+        summarize(
+          TAT250 =
+            duration_above_threshold(MEDI, Datetime, "above", 250, na.rm = TRUE),
+          TAT1000 =
+            duration_above_threshold(MEDI, Datetime, "above", 1000, na.rm = TRUE),
+          PAT1000 =
+            period_above_threshold(MEDI, Datetime, "above", 1000, na.rm = TRUE),
+          .groups = "drop",
+          photoperiod_duration = first(photoperiod_duration)
+        ) %>%
+        mutate(across(where(is.duration), as.numeric)) %>% 
+        pivot_longer(cols = -c(Id, Day, photoperiod_duration), names_to = "metric")
+      
+      #part-day metrics
+      part_day <- 
+        x %>% 
+        group_by(Id, Day, Photoperiod) %>% 
+        summarize(
+          TATd250 = 
+            duration_above_threshold(MEDI, Datetime, "above", 250, na.rm = TRUE),
+          TBTe10 = 
+            duration_above_threshold(MEDI, Datetime, "below", 10, na.rm =  TRUE),
+          .groups = "drop",
+          photoperiod_duration = first(photoperiod_duration)
+        ) %>% 
+        mutate(across(where(is.duration), as.numeric)) %>% 
+        pivot_longer(cols = -c(Id, Day, Photoperiod,
+                               photoperiod_duration), names_to = "metric") %>% 
+        filter((Photoperiod == "day" & metric == "TATd250") |
+               (Photoperiod == "evening" & metric == "TBTe10"))
+      
+      whole_day %>% 
+        bind_rows(part_day)
+    }
+  ) %>% 
+  list_rbind(names_to = "site") %>% 
+  nest(data = -metric)
+
+```
+
+##### Model fitting
+
+All models for Hypothesis showed very poor model diagnostics under a `gaussian` error distribution. According to the parameter metrics, the `poisson` family is a much more appropriate error distribution.
+
+```{r H1}
+
+formula_H1 <- value_dc ~ site + (1|site:Id)
+formula_H0 <- value_dc ~ 1 + (1|site:Id)
+
+map <- purrr::map
+
+inference_H1 <- 
+  metrics %>% 
+  filter(metric %in% metric_selection$H1) %>% 
+  mutate(data = 
+           data %>% 
+           purrr::map(\(x) x %>% mutate(value_dc = 
+                                   (value/photoperiod_duration) %>% round()))
+         )
+
+inference_H1 <- 
+  inference_H1 %>% 
+  inference_summary(formula_H1, formula_H0, p_adjustment = p_adjustment$H1,
+                    family = poisson())
+
+
+H1_table <- 
+Inference_Table(inference_H1, p_adjustment = p_adjustment$H1, value = value_dc)
+
+H1_table <-
+H1_table %>%
+  tab_footnote(
+    "Exponentiated beta coefficients from the final model, denoting the multiplication factor for the intercept, conditional on the site",
+    locations = cells_column_labels(columns = c("malaysia", "switzerland"))
+  ) %>%
+  tab_footnote(
+    "Model prediction for the intercept per hour of photo- or nighttime period, reference level for the site is Malaysia",
+    locations = cells_column_labels(columns = "Intercept")
+  ) %>%
+  fmt_duration(columns = Intercept, input_units = "seconds") %>%
+  fmt_number("Intercept", decimals = 0) %>%
+  fmt_number("switzerland", decimals = 3) %>%
+  tab_header(title = "Model Results for Hypothesis 1", )
+
+H1_table
+
+v1 <- gt::extract_cells(H1_table, switzerland, 1) %>% as.numeric() %>% round(3)
+v2 <- gt::extract_cells(H1_table, switzerland, 2) %>% as.numeric() %>% round(3)
+v3 <- gt::extract_cells(H1_table, switzerland, 4) %>% as.numeric() %>% round(3)
+
+```
+
+The model summary shows that swiss participants have significantly more time above threshold for 250 (TAT250) and 1000 lx (TAT1000) than participants in Malaysia, i.e., x`r v1` and x`r v2`, respectively (x`r v3` over 250 lx mel EDI during daytime hours, TATd250).
+
+##### Model diagnostics
+
+::: panel-tabset
+```{r diagnostics H1, results='asis'}
+Models <- inference_H1$model
+Data <- inference_H1$data
+Metrics <- inference_H1$metric
+
+#Code that knits a tab for each created model
+res <- pmap(list(Models, Data, Metrics), function(x, z, y) {
+  knitr::knit_child(text = c(
+    '#### `r y`',
+    '',
+    '```{r}',
+    '#| message: false',
+    '#| warning: false',
+    'Inf_plots1(x, z)',
+    'Inf_plots2(x, z)',
+    'Inf_plots3(x, z, value_dc, "exp")',
+    '```',
+    ''
+  ), envir = environment(), quiet = TRUE)
+  })
+#evaluates the code above
+cat(unlist(res), sep = "\n")
+
+```
+
+:::
+
+#### Hypothesis 2
+
+**$H2$**: There are differences in light logger-derived timing of light exposure between Malaysia and Switzerland.
+
+##### Metric calculation
+
+*H2*:
+
+-   M10m
+
+-   L5m
+
+-   IS
+
+-   IV
+
+-   LLiT 10
+
+-   LLiT 250
+
+-   Frequency crossing Threshold 250
+
+-   mean logarithmic melanopic EDI day & night
+
+```{r metrics calculation H2}
+#| warning: false
+
+metric_selection <- append(metric_selection, list(
+    H2_timing = c("M10m", "L5m", "IS", "IV", "LLiT10", "LLiT250", "FcT250"),
+  H2_interaction = "mean"
+)
+)
+
+p_adjustment <- append(
+  p_adjustment,
+  list(
+  H2 = 9
+))
+
+metrics <- 
+  rbind(
+    metrics,
+      data %>% 
+  map(
+    \(x) {
+      #whole-day metrics
+      whole_day <-
+      x %>%
+        group_by(Id, Day) %>%
+        summarize(
+          .groups = "drop",
+          M10m =
+            bright_dark_period(
+                  MEDI, Datetime, "brightest", "10 hours", 
+                  as.df = TRUE, na.rm = TRUE
+                  ) %>% pull(brightest_10h_mean) %>% log10(),
+          L5m =
+            bright_dark_period(
+                  MEDI, Datetime, "darkest", "5 hours", as.df = TRUE,
+                  loop = TRUE, na.rm = TRUE
+                  ) %>% pull(darkest_5h_mean) %>% log10(),
+          IV = intradaily_variability(MEDI, Datetime),
+          LLiT10 =
+            timing_above_threshold(
+              MEDI, Datetime, "above", 10, as.df = TRUE) %>%
+            pull(last_timing_above_10) %>% hms::as_hms() %>% as.numeric(),
+          LLiT250 =
+            timing_above_threshold(MEDI, Datetime, "above", 250, as.df = TRUE) %>%
+            pull(last_timing_above_250) %>% hms::as_hms() %>% as.numeric(),
+          FcT250 =
+            frequency_crossing_threshold(MEDI, 250, na.rm = TRUE),
+        ) %>%
+        mutate(across(where(is.duration), as.numeric)) %>% 
+        pivot_longer(cols = -c(Id, Day), names_to = "metric")
+      
+      #part-day metrics
+      part_day <- 
+        x %>% 
+        group_by(Id, Day, Photoperiod) %>% 
+        summarize(
+          .groups = "drop",
+          mean = mean(MEDI, na.rm = TRUE) %>% log10()
+        ) %>% 
+        pivot_longer(cols = -c(Id, Day, Photoperiod), names_to = "metric") %>% 
+        filter(Photoperiod != "night" & metric == "mean")
+      
+      #no-day metrics
+      no_day <- 
+          x %>% 
+        summarize(IS = interdaily_stability(MEDI, Datetime, na.rm = TRUE)) %>% 
+        pivot_longer(cols = IS, names_to = "metric")
+      
+      whole_day %>% 
+        bind_rows(part_day, no_day)
+    }
+  ) %>% 
+  list_rbind(names_to = "site") %>% 
+  nest(data = -metric)
+  )
+
+```
+
+Hypothesis 2 is analyzed in three distinct ways. The first part is similar to hypothesis 1 but looks at different metrics, that are associated with the timing of light (`Timing`). The second part looks at the possible interaction of light during the day to the evening (`Interaction`). And the third part looks at a model of light across the whole day as a smooth pattern (`Pattern`).
+
+##### Timing
+
+```{r H2 timing}
+#| warning: false
+#| message: false
+
+formula_H2_timing <- value ~ site + (1|site:Id)
+formula_H2_IV <- value ~ site
+formula_H0 <- value ~ 1 + (1|site:Id)
+formula_H0_IV <- value ~ 1
+
+lmer <- lme4::lmer
+
+inference_H2 <- 
+  metrics %>% 
+  filter(metric %in% metric_selection$H2_timing) %>% 
+  mutate(formula_H1 = case_match(metric,
+                                 "IS" ~ c(formula_H2_IV),
+                                 .default = c(formula_H2_timing)),
+         formula_H0 = case_match(metric,
+                                 "IS" ~ c(formula_H0_IV),
+                                 .default = c(formula_H0)),
+         type = (case_match(metric,
+                                 "IS" ~ "lm",
+                                 .default = "lmer")),
+         family = list(gaussian())
+         )
+
+
+inference_H2 <-
+  inference_H2 %>% 
+  inference_summary2(p_adjustment = p_adjustment$H2)
+
+H2_table_timing <- 
+Inference_Table(inference_H2, p_adjustment = p_adjustment$H2, value = value) %>%
+  fmt_number("Intercept", decimals = 2) %>%
+  fmt_number("switzerland", decimals = 2) %>%
+  cols_align(align = "center", columns = "p.value") %>%
+  tab_header(title = "Model Results for Hypothesis 2, Timing", ) %>% 
+  fmt_duration(columns = c(Intercept, switzerland), 
+               input_units = "seconds",
+               rows = 4:5, duration_style = "colon-sep") %>% 
+  tab_footnote(
+    "Values were log10 transformed before model fitting",
+    locations = cells_stub(rows = 1:2)
+  )
+
+H2_table_timing
+v1 <-  gt::extract_cells(H2_table_timing, Intercept, 1) %>% as.numeric()
+v2 <-  gt::extract_cells(H2_table_timing, switzerland, 1) %>% as.numeric()
+v3 <-  gt::extract_cells(H2_table_timing, switzerland, 4)
+v4 <-  gt::extract_cells(H2_table_timing, switzerland, 5)
+v5 <-  gt::extract_cells(H2_table_timing, switzerland, 6) %>% as.numeric()
+v6 <-  gt::extract_cells(H2_table_timing, Intercept, 6) %>% as.numeric()
+
+```
+
+The model summary shows that the 10 brightest hours (M10m) of swiss participants are significantly brighter than for participants in Malaysia, i.e., an average of `r 10^((v1+v2)) %>% round(0)` lx and `{r} 10^v1 %>% round(0)` lx, respectively and the frequency of crossing 250 lx is about 2 times as high for swiss participants compared to malaysian participants (`{r} (v6 + v5) %>% round(0)` compared to `{r} v6 %>% round(0)`, respectively). Swiss participants last time above 250 lx melanopic EDI (LLiT250) is about 1.5 hours later compared to malaysian participants (+`{r} v4`), and swiss participants avoid values above 10 lx after sundown (LLiT10) about 1 hour earlier compared to malaysia (`{r} v3`). 
+
+
+###### Model diagnostics
+
+:::: panel-tabset
+```{r diagnostics H2 timing, results='asis'}
+Models <- inference_H2$model[1:6]
+Data <- inference_H2$data[1:6]
+Metrics <- inference_H2$metric [1:6]
+
+#Code that knits a tab for each created model
+res <- pmap(list(Models, Data, Metrics), function(x, z, y) {
+  knitr::knit_child(text = c(
+    '####### `r y`',
+    '',
+    '```{r}',
+    '#| message: false',
+    '#| warning: false',
+    'Inf_plots1(x, z)',
+    'Inf_plots2(x, z)',
+    'Inf_plots3(x, z %>% drop_na(value), value, transformation = "identity")',
+    '```',
+    ''
+  ), envir = environment(), quiet = TRUE)
+  })
+#evaluates the code above
+cat(unlist(res), sep = "\n")
+
+```
+
+####### IS
+
+```{r diagnostics H2 IS}
+#| message: false
+#| warning: false
+# Inf_plots1(x, z)
+Inf_plots2(inference_H2$model[[7]], inference_H2$data[[7]])
+Inf_plots3(inference_H2$model[[7]], inference_H2$data[[7]], 
+           value, transformation = "identity")
+```
+
+
+::::
+
+##### Interaction
+
+```{r H2 Interaction}
+#| warning: false
+#| message: false
+
+formula_H2_interaction <- value ~ site*Photoperiod + (1+Photoperiod|site:Id)
+formula_H0_interaction <- value ~ site + Photoperiod + (1+Photoperiod|site:Id)
+
+inference_H2.2 <- 
+  tibble(metric = "log10(daily mean mel EDI)",
+         data = metrics %>% filter(metric == "mean") %>% pull(data)) %>% 
+  mutate(formula_H1 = c(formula_H2_interaction),
+         formula_H0 = c(formula_H0_interaction),
+         type = "lmer"
+         )
+
+inference_H2.2 <-
+  inference_H2.2 %>%
+  inference_summary2(p_adjustment = 1)
+
+H2_table_interaction <-
+Inference_Table(inference_H2.2, p_adjustment = 1, value = value) %>%
+  fmt_number(
+    c("Intercept", "switzerland", Photoperiodevening, "switzerland:Photoperiodevening"), 
+    decimals = 2) %>%
+  cols_hide(c("cor__Intercept.Photoperiodevening", "sd__Photoperiodevening")) %>%
+  cols_align(align = "center", columns = "p.value") %>%
+  tab_header(title = "Model Results for Hypothesis 2, Interaction", ) %>%
+  tab_footnote(
+    "Values were log10 transformed before model fitting"
+  ) %>% 
+  tab_footnote(
+    "p-value refers to the interaction effect",
+    locations = cells_column_labels(p.value)
+  ) %>% 
+  cols_label(
+    Photoperiodevening = "Evening",
+    `switzerland:Photoperiodevening` = "Switzerland:Evening") %>% 
+  cols_add("Day" = 0, .before = Photoperiodevening) %>% 
+  tab_spanner("Time coeff.", columns = c(Day, Photoperiodevening)) %>% 
+  tab_spanner("Interaction coeff.", columns = c(`switzerland:Photoperiodevening`)) %>% 
+  tab_style(
+    style = list(
+      cell_text(weight = "bold")
+    ),
+    locations = cells_column_spanners()
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_text(weight = "bold")
+    ),
+    locations = cells_column_labels()
+  ) %>% 
+    tab_style(
+      style = cell_text(color = pal_jco()(2)[2]),
+      locations = cells_column_labels(c("switzerland:Photoperiodevening"))
+    )
+
+H2_table_interaction
+
+v1 <-  gt::extract_cells(H2_table_interaction, 3:8) %>% as.numeric()
+v2 <- 10^(v1[1]+v1[3]) %>% round(0)
+v3 <- 10^(v1[1]+v1[3] + inference_H2.2$summary[[1]]$estimate[3] + 
+            inference_H2.2$summary[[1]]$estimate[4])  %>% round(1)
+v4 <- 10^(v1[1]) %>% round(0)
+v5 <- 10^(v1[1] + inference_H2.2$summary[[1]]$estimate[3]) %>% round(1)
+
+```
+
+The model reveals that swiss participants have brighter days and darker evenings compared to the malaysia site. Specifically, model prediction is that a swiss participant has a daily mean melanopic EDI during daytime hours of `r v2` lx, and `r v3` lx during evening hours. An average malaysian participant reaches a mean `r v4` lx during daytime, and `r v5` lx during evening hours. 
+
+###### Model diagnostics
+
+```{r diagnostics H2 Interaction}
+Inf_plots1(inference_H2.2$model[[1]], inference_H2.2$data[[1]])
+Inf_plots2(inference_H2.2$model[[1]], inference_H2.2$data[[1]])
+Inf_plots3(inference_H2.2$model[[1]], inference_H2.2$data[[1]] %>% 
+             drop_na(value), value, transformation = "identity"
+           )
+```
+
+
+##### Pattern
+
+###### Metric calculation
+
+```{r H2 Pattern data preparation}
+
+metrics <-
+  rbind(
+    metrics,
+    data %>%
+      map(\(x) {
+        x %>%
+          select(Id, Datetime, MEDI) %>%
+          mutate(Time = hms::as_hms(Datetime) %>% as.numeric() / 3600,
+                 Day = date(Datetime) %>% factor(),
+                 Id_day = interaction(Id, Day),
+                 metric = "MEDI")
+      }) %>%
+      list_rbind(names_to = "site") %>%
+      mutate(site = factor(site)) %>%
+      nest(data = -metric)
+  )
+
+```
+
+###### Model fitting
+
+::::: panel-tabset
+
+### adjusted
+
+```{r H2 Pattern adjusted}
+
+formula_H2_pattern <- log10(MEDI) ~ site + s(Time, by = site, bs = "cc", k=12) + s(Id, by = site, bs = "re")
+
+formula_H0_pattern <- log10(MEDI) ~ s(Time, bs = "cc", k = 12) + s(Id, by = site, bs = "re")
+
+#setting the ends for the cyclic smooth
+knots_day <- list(Time = c(0, 24))
+
+#Model generation
+Pattern_model0 <- 
+  bam(formula_H0_pattern, 
+      data = metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]], 
+      knots = knots_day,
+      samfrac = 0.1,
+      discrete = OpenMP_support,
+      nthreads = 4,
+      control = list(nthreads = 4))
+
+Pattern_model <- 
+  bam(formula_H2_pattern, 
+      data = metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]], 
+      knots = knots_day,
+      samfrac = 0.1,
+      nthreads = 4,
+      discrete = OpenMP_support,
+      control = list(nthreads = 4))
+
+#Model performance
+AICs <- 
+AIC(Pattern_model, Pattern_model0)
+AICs
+
+Pattern_model_sum <- 
+summary(Pattern_model)
+Pattern_model_sum
+
+# plot(Pattern_model)
+
+plot_smooth(
+  Pattern_model,
+  view = "Time",
+  plot_all = "site",
+  rug = F,
+  n.grid = 90,
+  col = pal_jco()(2),
+  rm.ranef = "s(Id)",
+  sim.ci = TRUE
+  )
+
+
+plot_diff(Pattern_model,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          comp = list(site = c("malaysia", "switzerland")),
+          sim.ci = TRUE)
+
+```
+
+##### Model Diagnostics
+
+```{r diagnostics H2 Pattern}
+gam.check(Pattern_model, rep = 100)
+```
+
+### preregistration
+
+```{r H2 Pattern prereg}
+
+formula_H2_pattern <- log10(MEDI) ~ 
+  site + s(Time, by = site, bs = "cc", k=12) + 
+  s(Time, by = Id, bs = "cc", k = 12) + 
+  s(Id, by = site, bs = "re")
+
+formula_H0_pattern <- log10(MEDI) ~ 
+  s(Time, bs = "cc", k = 12) + 
+  s(Time, by = Id, bs = "cc", k = 12) + 
+  s(Id, by = site, bs = "re")
+
+formula_Hm1_pattern <- log10(MEDI) ~ 
+  s(Time, by = Id, bs = "cc", k = 12) + 
+  s(Id, by = site, bs = "re")
+
+#setting the ends for the cyclic smooth
+knots_day <- list(Time = c(0, 24))
+
+#Model generation
+Pattern_model0 <- 
+  bam(formula_H0_pattern, 
+      data = metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]], 
+      knots = knots_day,
+      samfrac = 0.1,
+      discrete = OpenMP_support,
+      nthreads = 4,
+      control = list(nthreads = 4))
+
+Pattern_modelm1 <- 
+  bam(formula_Hm1_pattern, 
+      data = metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]], 
+      knots = knots_day,
+      samfrac = 0.1,
+      discrete = OpenMP_support,
+      nthreads = 4,
+      control = list(nthreads = 4))
+
+Pattern_modelm2 <- 
+  bam(formula_H2_pattern, 
+      data = metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]], 
+      knots = knots_day,
+      samfrac = 0.1,
+      nthreads = 4,
+      discrete = OpenMP_support,
+      control = list(nthreads = 4))
+
+#Model performance
+AICs <- 
+AIC(Pattern_modelm2, Pattern_model0, Pattern_modelm1)
+AICs
+
+Pattern_model_sum <- 
+summary(Pattern_modelm2)
+Pattern_model_sum
+
+#Model overview
+# plot(Pattern_model, shade = TRUE, residuals = TRUE, cex = 1, all.terms = TRUE)
+
+colors_pattern <- pal_jco()(2)
+
+plot_smooth(
+  Pattern_modelm1,
+  view = "Time",
+  plot_all = "Id",
+  rm.ranef = FALSE,
+  se = 0,
+  rug = F,
+  n.grid = 90,
+  col = c(rep(colors_pattern[1], 19),rep(colors_pattern[2], 20)),
+  # sim.ci = TRUE
+  )
+
+```
+
+##### Model Diagnostics
+
+```{r diagnostics H2 Pattern2}
+gam.check(Pattern_model)
+```
+
+:::::
+
+Using the formula specified in the preregistration document reveals no significant difference between the sites (∆AIC < 2 for the more complex model). Furthermore, a reduced model only including individual smooths per participant (`Pattern_modelm1`) reveals no common pattern over time, i.e. the patterns vary so strongly between participants, that the model suffers when trying to extract common values at a given time point.
+
+To nonetheless illustrate the overall trend between the sites, a simplified model is used, that only implements random intercepts for the participants (compared to random smooths in the preregistration variant). This allows for an overall comparison between the sites, even though it can not be mapped 1:1 on individual participants. Here, there is strong evidence for the effect of site, and the difference is significant across most of the day. The difference-plot shows that malaysian participants show lower MEDI values during the day compared to swiss participants, and higher ones at night.
+
+### Research Question 2
+
+**RQ 2**: Are there differences in self-reported light exposure patterns using LEBA across time or between the two sites, and if so, in which questions/scores?
+
+As RQ relates to LEBA questions and factors, factors have to be calculated first.
+
+##### Metric calculation
+
+```{r metrics H3}
+
+p_adjustment <- append(
+  p_adjustment,
+  list(
+  H3 = 23+5
+))
+
+
+#Factor calculation
+factors_leba <- list(
+  F1 = names(leba_questions)[c(1,2,3)],
+  F2 = names(leba_questions)[c(4:9)],
+  F3 = names(leba_questions)[c(10:14)],
+  F4 = names(leba_questions)[c(15:18)],
+  F5 = names(leba_questions)[c(19:23)]
+)
+Fs <- paste0("F", 1:5)
+
+leba_data_combined <-
+leba_data_combined %>% 
+  mutate(leba_F2_04 = fct_rev(leba_F2_04), 
+         leba_F1 = rowSums(across(contains(factors_leba$F1), as.numeric)),
+         leba_F2 = rowSums(across(contains(factors_leba$F2), as.numeric)),
+         leba_F3 = rowSums(across(contains(factors_leba$F3), as.numeric)),
+         leba_F4 = rowSums(across(contains(factors_leba$F4), as.numeric)),
+         leba_F5 = rowSums(across(contains(factors_leba$F5), as.numeric)),
+         ) %>% 
+  mutate(leba_F2_04 = fct_rev(leba_F2_04),
+         across(c(site, Id), factor))
+
+leba_factors <- c(
+  leba_F1 = "Wearing blue light filtering glasses indoors and outdoors",
+  leba_F2 = "Spending time outdoors",
+  leba_F3 = "Using phones and smartwatches in bed before sleep",
+  leba_F4 = "Controlling and using ambient light before bedtime",
+  leba_F5 = "Using light in the morning and during daytime"
+)
+
+#set variable labels
+var_label(leba_data_combined) <- leba_factors %>% as.list()
+
+leba_metrics <- 
+  leba_data_combined %>% 
+  mutate(across(contains("leba_F"), as.numeric)) %>%
+  pivot_longer(cols = starts_with("leba_F"), names_to = "metric", values_to = "value") %>% 
+  nest(data = -metric)
+
+leba_metrics <- 
+leba_metrics %>% 
+  rowwise() %>% 
+  mutate(data = list({
+    if(str_length(metric) == 7) data
+    else data %>% mutate(value = factor(value, levels = 1:5, labels = leba_levels))
+  }
+  ))
+
+```
+
+#### Hypothesis 3
+
+**$H3$**: There are differences in LEBA items and factors between Malaysia and Switzerland.
+
+##### Model fitting
+
+::: panel-tabset
+
+##### Items
+
+###### Whole Dataset
+
+```{r H3 items}
+formula_H3 <- value ~ site + (1|site:Id)
+formula_H0 <- value ~ 1 + (1|site:Id)
+
+clmm <- ordinal::clmm
+
+inference_H3 <- 
+leba_metrics %>% 
+  filter(str_length(metric) != 7) %>% 
+  mutate(formula_H1 = c(formula_H3),
+         formula_H0 = c(formula_H0),
+         type = "clmm")
+
+inference_H3 <-
+  inference_H3 %>% 
+    rowwise() %>% 
+    mutate(
+      model = 
+        list(
+            do.call(type, list(formula = formula_H1,
+                                          data = data,
+                               nAGQ = 5))
+            ),
+      model0 = list(
+        do.call(type, list(formula = formula_H0,
+                           data = data,
+                           nAGQ = 5))
+      ))
+
+inference_H3$comparison <- vector("list", nrow(inference_H3))
+
+for(i in 1:nrow(inference_H3)) {
+  comparison <- anova(inference_H3$model[[i]], inference_H3$model0[[i]])
+  inference_H3$comparison[[i]] <- comparison
+}
+
+inference_H3 <- 
+inference_H3 %>%
+  mutate(
+      p.value_adj = comparison$`Pr(>Chisq)` %>% .[2] %>%
+        p.adjust(method = "fdr", n = p_adjustment$H3),
+      significant = p.value_adj <= 0.05,
+      summary = list(
+        switch(significant+1,
+               tidy(model0),
+               tidy(model))),
+    table = list(
+        tibble(
+          metric = metric,
+          p.value =
+            p.value_adj %>%
+            style_pvalue() %>%
+            {ifelse(significant, paste0("**", ., "**"),.)},
+          summary %>%
+            mutate(estimate = estimate) %>%
+            select(term, estimate) %>%
+            filter(term != "sd__(Intercept)" &
+                     term != "sd__Observation") %>%
+            mutate(term = str_remove_all(term, "\\(|\\)|site")) %>%
+            pivot_wider(names_from = term, values_from = estimate)
+        ) %>% 
+          mutate(malaysia = if(exists("switzerland")) 0 else NA)
+  )
+  )
+
+inference_H3 %>% pull(table) %>% list_rbind() %>% select(metric, p.value) %>% gt()
+
+```
+
+Under the strict p-value adjustment for H3 (n=`{r} p_adjustment$H3`), none of the behavioral questions are significantly different.
+
+###### Only last collection point
+
+```{r H3 items 31}
+formula_H3 <- value ~ site
+formula_H0 <- value ~ 1
+
+clmm <- ordinal::clmm
+clm <- ordinal::clm
+
+inference_H3.2 <- 
+leba_metrics %>% 
+  filter(str_length(metric) != 7) %>% 
+  mutate(formula_H1 = c(formula_H3),
+         formula_H0 = c(formula_H0),
+         type = "clm",
+         data = list(data %>% filter(Day == 31)))
+
+inference_H3.2 <-
+  inference_H3.2 %>% 
+    rowwise() %>% 
+    mutate(
+      model = 
+        list(
+            do.call(type, list(formula = formula_H1,
+                                          data = data))
+            ),
+      model0 = list(
+        do.call(type, list(formula = formula_H0,
+                           data = data))
+      ))
+
+inference_H3.2$comparison <- vector("list", nrow(inference_H3.2))
+
+for(i in 1:nrow(inference_H3.2)) {
+  comparison <- anova(inference_H3.2$model[[i]], inference_H3.2$model0[[i]])
+  inference_H3.2$comparison[[i]] <- comparison
+}
+
+inference_H3.2 <- 
+inference_H3.2 %>%
+  mutate(
+      p.value_adj = comparison$`Pr(>Chisq)` %>% .[2] %>%
+        p.adjust(method = "fdr", n = p_adjustment$H3),
+      significant = p.value_adj <= 0.05,
+      summary = list(
+        switch(significant+1,
+               tidy(model0),
+               tidy(model))),
+    table = list(
+        tibble(
+          metric = metric,
+          p.value =
+            p.value_adj %>%
+            style_pvalue() %>%
+            {ifelse(significant, paste0("**", ., "**"),.)},
+          summary %>%
+            mutate(estimate = estimate) %>%
+            select(term, estimate) %>%
+            filter(term != "sd__(Intercept)" &
+                     term != "sd__Observation") %>%
+            mutate(term = str_remove_all(term, "\\(|\\)|site")) %>%
+            pivot_wider(names_from = term, values_from = estimate)
+        ) %>% 
+          mutate(malaysia = if(exists("switzerland")) 0 else NA)
+  )
+  )
+
+inference_H3.2 %>% pull(table) %>% list_rbind() %>% select(metric, p.value) %>% gt()
+
+```
+
+
+##### Factors
+
+```{r H3 factors}
+
+formula_H3 <- value ~ site + (1|site:Id)
+formula_H0 <- value ~ 1 + (1|site:Id)
+
+inference_H3.3 <-
+  leba_metrics %>%
+  filter(str_length(metric) == 7) %>%
+  mutate(formula_H1 = c(formula_H3),
+         formula_H0 = c(formula_H0),
+         type = "lmer",
+         family = list(poisson())
+         )
+
+inference_H3.3 <-
+  inference_H3.3 %>%
+  inference_summary2(p_adjustment = p_adjustment$H3)
+
+inference_H3.3 %>% pull(table) %>% list_rbind() %>% select(metric, p.value) %>% gt()
+
+```
+
+Under the strict p-value adjustment for H3 (n=`{r} p_adjustment$H3`), none of the behavioral factors are significantly different between sites.
+
+###### Model diagnostics
+
+:::: panel-tabset
+
+```{r diagnostics H3, results='asis'}
+Models <- inference_H3.3$model0
+Data <- inference_H3.3$data
+Metrics <- inference_H3.3$metric
+
+
+#Code that knits a tab for each created model
+res <- pmap(list(Models, Data, Metrics), function(x, z, y) {
+  knitr::knit_child(text = c(
+    '#### `r y`',
+    '',
+    '```{r}',
+    '#| message: false',
+    '#| warning: false',
+    'Inf_plots1(x, z)',
+    'Inf_plots2(x, z)',
+    'Inf_plots3(x, z, value, "identity")',
+    '```',
+    ''
+  ), envir = environment(), quiet = TRUE)
+  })
+#evaluates the code above
+cat(unlist(res), sep = "\n")
+
+```
+
+::::
+
+:::
+
+#### Hypothesis 4
+
+**$H4$**: LEBA scores vary over time within participants
+
+For this hypothesis, only the malaysian data is used, as specified in the preregistration document.
+
+```{r H4}
+bootstraps <- 10^4
+
+leba_metrics_H4 <- 
+leba_metrics %>% 
+  mutate(data = list(data %>% filter(site == "malaysia")))
+
+boot_plot <- function(data) {
+  data %>% 
+  ggplot(aes(x = CI95lower/(1/3))) + 
+  geom_histogram(aes(fill = CI95lower/(1/3) >= 0.5), binwidth = 1, col = "white", alpha = 0.75) +
+  scale_x_continuous(breaks = c(0:10)) + 
+  theme_void() + 
+  labs(x = "lower CI: Number of varying answers", y = "Frequency")+
+  theme(axis.text = element_text(),
+        legend.position = "none",
+        axis.title.x = element_text(),
+        panel.grid.major.y = element_line(colour = "grey80")) + 
+  scale_y_continuous(labels = scales::label_percent(scale = 100/19),
+                     breaks = c(0, 50/100*19, 25/100*19, 75/100*19, 100/100*19))+
+  coord_cartesian(ylim = c(0, 100/100*19))
+}
+
+leba_metrics_H4 <- 
+  leba_metrics_H4 %>%
+  rowwise() %>% 
+  mutate(bootstrap =
+           list(data %>%
+               select(Id, value) %>%
+               mutate(value = as.numeric(value)) %>%
+               expand_grid(bootstrap = seq(bootstraps)) %>%
+               group_by(Id, bootstrap) %>%
+               slice_sample(prop = 1, replace = TRUE) %>%
+               summarize(sd = sd(value), .groups = "drop_last") %>%
+               summarize(
+                 mean_sd = mean(sd),
+                 CI95lower = quantile(sd, 0.025),
+                 CI95_upper = quantile(sd, 0.975),
+                 .groups = "drop_last"
+               ) %>%
+               mutate(significant = ifelse(CI95lower == 0, FALSE, TRUE)) %>%
+               summarize(
+                 percent_significant = mean(significant),
+                 plot = list(tibble(CI95lower) %>% boot_plot())
+               )
+           )
+         )
+
+labels_leba <- 
+var_label(leba_data_combined)[-c(1:3)] %>% enframe() %>% unnest(value)
+
+leba_results_H4 <-
+  leba_metrics_H4 %>%
+  unnest(bootstrap) %>%
+  select(-data) %>%
+  left_join(labels_leba, by = c("metric" = "name")) %>%
+  rename(question = value) %>% 
+  group_by(quartile =
+             cut(
+               percent_significant,
+               breaks = c(-0.1, 0.25, 0.5, 0.75, 1.1),
+               labels =
+                 paste(
+                   "stable over time in",
+                   c("75-100%", "50-75%", "25-50%", "25-0%"),
+                   "of participants"
+                 )
+             ))
+
+leba_results_H4 %>%
+  relocate(question, .before = 1) %>%
+  arrange(percent_significant) %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(columns = plot),
+    fn = function(x)
+      leba_results_H4$plot %>% ggplot_image(height = px(200))
+  ) %>%
+  fmt_percent(columns = percent_significant) %>%
+  cols_label(plot = "",
+             percent_significant = "Participants with significant variation",
+             question = "Item/Factor",
+             metric = "Metric code") %>%
+  cols_align(align = "center", columns = -question) %>%
+  tab_footnote(
+    paste(
+      "based on",
+      bootstraps,
+      "bootstraps of individual participants answers across the four weeks of data collection. If the lower threshold for a 95% confidence interval is above 0, the participant is considered to have significant variation in their answers."
+    ),
+    locations = cells_column_labels(columns = "percent_significant")
+  ) %>%
+  tab_header(title = "Model Results for Hypothesis 4") %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = list(cells_column_labels(), cells_stub())
+  )
+
+leba_H4_table <- 
+leba_results_H4 %>% select(metric, quartile) %>% nest(data = metric) %>%
+  arrange(quartile) %>% 
+  mutate(data = map(data, ~.x %>% pull(metric) %>% paste(collapse = ", "))) %>% 
+  unnest(data) %>% 
+  mutate(data = str_replace_all(data, "leba_F", "Factor "),
+         data = str_replace_all(data, "_", ": Item ")) %>%
+  gt() %>% 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_row_groups()
+  ) %>% 
+  tab_options(column_labels.hidden = TRUE) %>% 
+  tab_header(title = "Hypothesis 4: Extent of stable LEBA items and factors over time")
+  
+leba_H4_table
+
+leba_H4_table %>% gtsave("figures/Table_H4.png")
+
+v1 <- leba_results_H4 %>% summarize(length = n())
+
+```
+
+As the two summary tables show, the majority of items is very stable over time in our sample. `{r} v1[1,2] + v1[2,2]` items and factors don't show significant variance in over half of participants. The factors are less stable over time and with the exception of Factor 1, all show variance in over 75% of participants. This is to be expected, as the factor calculation across items is more likely to show variance than individual items.
+The next section summarizes the average changes in and standard deviation of the LEBA metrics across the four weeks of data collection.
+
+```{r h4 average change}
+#average change
+leba_changes <- 
+leba_metrics %>% 
+  mutate(data = list(data %>% filter(site == "malaysia")),
+         data = list(data %>% mutate(value = as.numeric(value)) %>% 
+                       group_by(Id) %>% 
+                       summarize(sd = sd(value), mean = mean(value),
+                                 cv = sd/mean, .groups = "drop_last") %>% 
+                       summarize(mean_sd = mean(sd),
+                                 mean_cv = mean(cv))))
+         
+leba_changes %>% unnest(data) %>% select(metric, mean_sd) %>% 
+  mutate(average_change = mean_sd/(1/3),
+         average_change = average_change %>% round()) %>%
+  left_join(labels_leba, by = c("metric" = "name")) %>%
+  relocate(question = value, .before = 1) %>% 
+  gt() %>% 
+  fmt_number(columns = mean_sd, decimals = 2) %>% 
+    tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>% 
+  cols_label(
+             question = "Item/Factor",
+             metric = "Metric code",
+             mean_sd = "SD",
+             average_change = "Average change") %>%
+  tab_footnote(
+    "Average standard deviation across participants",
+    locations = cells_column_labels(columns = "mean_sd")
+  ) %>% 
+  tab_footnote(
+        "Average change in scores total across the four weeks of data collection. A value of 1 indicates that across the 9 times of data collection, only once did a participant's score change by 1 point. A value of 2 indicates a score change once by 2 points, or two times by 1, and so forth.",
+    locations = cells_column_labels(columns = "average_change")
+  ) %>% 
+  tab_header(title = "Average change in LEBA metrics across four weeks of data collection")
+
+```
+
+
+### Research Question 3
+
+**RQ 3** In general, how are light exposure and LEBA related and are there differences in this relationship between the two sites?
+
+##### Metric calculation
+
+Additional metrics need to be calculated:
+
+-   First time above threshold 250 lx mel EDI (FLiT250)
+-   First time above threshold 1000 lx mel EDI (FLiT1000)
+-   L5 without sleep period (night), i.e. day and evening (L5mde)
+-   L5 only night time (L5mn)
+-   Melanopic/photopic ratio (MPratio)
+-   Light exposure (dose of light) for melanopic EDI (LE)
+-   Spectral contribution to melanopic EDI (SCmelEDI) [^1]
+
+[^1]: The spectral contribution will be calculated from melanopic Irradiance, i.e. melanopic EDI divided by 753.35 (maximum melanopic luminous efficacy of radiation) and divided by the sum of irradiance across all wavelengths.
+
+
+```{r metrics H5}
+
+p_adjustment <- append(
+  p_adjustment,
+  list(
+  H5 = 2*84,
+  H6 = 23+5
+))
+
+metrics <-
+  rbind(
+    metrics,
+    data %>%
+map(
+  \(x) {
+      #whole-day metrics
+      whole_day <-
+      x %>%
+        group_by(Id, Day) %>%
+        summarize(
+          .groups = "drop",
+          FLiT1000 =
+            timing_above_threshold(
+              MEDI, Datetime, "above", 1000, as.df = TRUE) %>%
+            pull(first_timing_above_1000) %>% hms::as_hms() %>% as.numeric(),
+          FLiT250 =
+            timing_above_threshold(MEDI, Datetime, "above", 250, as.df = TRUE) %>%
+            pull(first_timing_above_250) %>% hms::as_hms() %>% as.numeric(),
+          MPratio = mean(MEDI, na.rm = TRUE)/mean(Photopic.lux, na.rm = TRUE),
+          LE = sum(MEDI, na.rm = TRUE)/60,
+          SCmelEDI = mean(MEDI, na.rm = TRUE)/753.35/
+            mean(rowSums(across(starts_with("WL_")))*1000, na.rm = TRUE)
+        ) %>%
+        mutate(across(where(is.duration), as.numeric)) %>% 
+        pivot_longer(cols = -c(Id, Day), names_to = "metric")
+      
+      #part-day metrics
+      part_day <-
+        x %>%
+        group_by(Id, Day, Night = Photoperiod == "night") %>% 
+        summarize(
+          .groups = "drop",
+          L5m =
+            bright_dark_period(
+                  MEDI, Datetime, "darkest", "5 hours", as.df = TRUE, 
+                  na.rm = TRUE
+                  ) %>% pull(darkest_5h_mean) %>% log10()
+        ) %>% 
+        pivot_longer(cols = -c(Id, Day, Night), names_to = "metric") %>% 
+        mutate(metric = case_when(
+          metric == "L5m" & Night == TRUE ~ "L5mn",
+          metric == "L5m" & Night == FALSE ~ "L5mde"
+        ))
+      
+      whole_day %>% 
+        bind_rows(part_day)
+    }
+  ) %>% 
+  list_rbind(names_to = "site") %>% 
+  nest(data = -metric)
+  )
+
+#nest the datasets by site
+metricsRQ3 <-
+  metrics %>%
+  rowwise() %>% 
+  mutate(data = list(data %>% 
+                       mutate(across(any_of("Day"), as_date))
+                     )
+         ) %>% 
+  unnest(data) %>%
+  nest(data = -c(site, metric)) %>%
+  nest(data = -site)
+
+#select relevant metrics by question
+metric_selection$H5 <-
+  list(
+    leba_F1_01 = c(),
+    leba_F1_02 = c(),
+    leba_F1_03 = c(),
+    leba_F2_04 = c("M10m", "TAT250", "TAT1000", "PAT1000", "IV", "IS"),
+    leba_F2_05 = c("M10m", "TAT250", "TAT1000", "PAT1000", "IV", "IS"),
+    leba_F2_06 = c("M10m", "TAT250", "TAT1000", "PAT1000", "IV", "IS"),
+    leba_F2_07 = c("M10m", "TAT250", "TAT1000", "PAT1000", "IV", "IS"),
+    leba_F2_08 = c("M10m", "TAT250", "TAT1000", "PAT1000", "IV", "IS"),
+    leba_F2_09 = c("FLiT1000", "IV", "IS"),
+    leba_F3_10 = c("LLiT10", "LLiT250", "L5mn", "IV", "IS"),
+    leba_F3_11 = c("FLiT250", "IV", "IS"),
+    leba_F3_12 = c("L5m", "IV", "IS"),
+    leba_F3_13 = c("LLiT10", "LLiT250", "L5mn", "IV", "IS"),
+    leba_F3_14 = c("L5m", "IV", "IS"),
+    leba_F4_15 = c("LLiT10", "LLiT250", "L5mde", "IV", "IS"),
+    leba_F4_16 = c("LLiT10", "LLiT250", "L5mde", "IV", "IS"),
+    leba_F4_17 = c("L5m", "L5mn", "IV", "IS"),
+    leba_F4_18 = c("LLiT10", "LLiT250", "L5mde", "IV", "IS"),
+    leba_F5_19 = c("IV", "IS", "L5mn", "L5mde", "M10m"),
+    leba_F5_20 = c("LE", "SCmelEDI", "MPratio"),
+    leba_F5_21 = c("LE"),
+    leba_F5_22 = c("SCmelEDI", "FLiT10", "FLiT250"),
+    leba_F5_23 = c("SCmelEDI", "FLiT10", "FLiT250")
+  )
+
+#transform relevant metrics to a table of metrics
+metric_selectionH5 <-
+metric_selection$H5 %>%
+  enframe() %>%
+  unnest(value) %>%
+  mutate(hypothesised = TRUE)
+
+```
+
+
+#### Hypothesis 5
+
+**$H5$**: LEBA items correlate with preselected light-logger derived light exposure variables.
+
+Due to how the LEBA questions were phrased, different timespan comparisons are needed. For Malaysia, only the last instance is used and average metric values are calculated from daily data. For Switzerland, respective time periods are compared to one another, i.e. a LEBA period of 4 days is compared to the light exposure metrics from the same 4 days, and averaged over those days for a one-to-one comparison.
+
+::: panel-tabset
+
+###### Malaysia
+
+```{r H5 Malaysia}
+#| fig-height: 20
+#| fig-width: 12
+
+#collect the light exposure data for malaysia
+metrics_H5_malaysia <- 
+  metricsRQ3 %>% 
+  filter(site == "malaysia") %>% 
+  unnest(data) %>% 
+  select(-site) %>% 
+  filter(metric != "mean")
+
+#average values across all days
+metrics_H5_malaysia <- 
+  metrics_H5_malaysia %>% 
+  rowwise() %>% 
+  mutate(data = list(data %>% 
+                       group_by(Id) %>% 
+                       summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
+  )
+  )
+
+#collect the appropriate day for the LEBA data
+leba_H5_malaysia <-
+  leba_data_combined %>% filter(site == "malaysia", Day ==31) %>% 
+  select(-Datetime, -site, -Day) %>% 
+    mutate(across(-Id, as.numeric)) %>% 
+  pivot_longer(cols = -Id, names_to = "leba", values_to = "leba_values")
+
+#join the data
+leba_light_H5_malaysia <-
+metrics_H5_malaysia %>% 
+  unnest(data) %>% 
+  rename(metric_value = value) %>%
+  left_join(leba_H5_malaysia, by = "Id",
+            relationship = "many-to-many") %>% 
+  select(-Id) %>% 
+  drop_na()
+
+#calculate correlations
+corr_malaysia <-
+  leba_light_H5_malaysia %>% 
+    group_by(metric, leba) %>% 
+    summarize(
+      correlation = cor(metric_value, leba_values, method = "spearman"),
+              p_value = cor.test(metric_value, leba_values)$p.value,
+              p_value_adjusted =p.adjust(p_value, method = "fdr", 
+                                         n = p_adjustment$H5),
+              significant = p_value <= 0.05,
+              significant_adjusted = p_value_adjusted <= 0.05,
+              .groups = "drop") %>%
+  mutate(      
+    question = leba_questions[leba],
+    factor = leba_factors[leba],
+    question = ifelse(is.na(question), factor, question),
+    .before = 1) %>% 
+  fill(factor) %>% 
+  left_join(metric_selectionH5, by = c("metric" = "value", "leba" = "name")) %>% 
+  mutate(hypothesised = ifelse(is.na(hypothesised), FALSE, hypothesised),
+         coloring = case_when(
+           significant_adjusted & hypothesised ~ "Hypothesised and significant",
+           significant & hypothesised ~ "Hypothesised and (unadjusted) significant",
+           significant & !hypothesised ~ "(unadjusted) Significant",
+           !significant_adjusted & hypothesised ~ "Hypothesised",
+           TRUE ~ "None"
+         ) %>% factor(levels = c("Hypothesised and significant", "Hypothesised and (unadjusted) significant", "(unadjusted) Significant", "Hypothesised", "None")
+         )
+         ) %>% 
+    mutate(
+    leba = leba %>% 
+        str_remove("leba_") %>% 
+        str_replace("_", ", ") %>% 
+        str_replace("(F[:digit:])$", "\\1 (overall)")
+  )
+
+colors_H5 <- c("gold", "orange", "white", "red", "grey")
+
+
+#display the results
+corr_plot_malaysia <- 
+corr_malaysia %>% 
+  ggplot(aes(x = metric, y = (leba %>% factor() %>% fct_rev()), fill = abs(correlation), col = coloring)) +
+  geom_blank()+
+  geom_tile(data = corr_malaysia %>% filter(coloring != "None"), linewidth = 0.25) + 
+  geom_text(
+    aes(label = 
+          paste(
+            paste("c=",round(correlation, 2)), 
+            p_value %>% style_pvalue(prepend_p = TRUE), 
+            sep = "\n")
+        ),
+    fontface = "bold",
+    size = 1.8) +
+  coord_fixed() +
+  scale_fill_viridis_c(limits = c(0,1))+
+  scale_color_manual(values = colors_H5, drop = FALSE)+
+  labs(y = "LEBA questions and factors", x = "Metrics", color = "Relevance",
+       fill = "(abs) Correlation", subtitle = "Malaysia")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.subtitle = element_text(color = pal_jco()(1)))
+
+corr_plot_malaysia
+
+```
+
+
+###### Switzerland
+
+To combine relevant metrics with LEBA questionnaires, Metric days will be associated with days of LEBA questionnaires and previous days up until the previous collection point.
+
+```{r H5 Switzerland}
+#| fig-height: 20
+#| fig-width: 12
+
+#collect the light exposure data for Switzerland
+metrics_H5_switzerland <- 
+  metricsRQ3 %>% 
+  filter(site == "switzerland") %>% 
+  unnest(data) %>% 
+  select(-site) %>% 
+  filter(metric != "mean") %>% 
+  filter(metric != "IS")
+  #we have to remove IS for now, as it has to be computed for each section for Switzerland
+
+#collect the appropriate day for the LEBA data
+leba_H5_switzerland <-
+  leba_data_combined %>% filter(site == "switzerland") %>% 
+  mutate(
+    leba_col_period = Day,
+    Day = date(Datetime)) %>% 
+  select(-Datetime, -site) %>% 
+    mutate(across(-c(Id, Day, leba_col_period), as.numeric))
+
+#average values across collection days
+metrics_H5_switzerland <- 
+metrics_H5_switzerland %>% 
+  rowwise() %>% 
+  mutate(data = list(
+    data %>% 
+  full_join(leba_H5_switzerland, by = c("Id", "Day")) %>% 
+  arrange(Id, Day) %>% 
+  fill(starts_with("leba_"), .direction = "up") %>% 
+  drop_na(value) %>% 
+  rename(col_period = leba_col_period) %>% 
+  pivot_longer(cols = starts_with("leba_"), names_to = "leba", values_to = "leba_values") %>% 
+  group_by(Id, col_period) %>% 
+  summarize(
+    value = mean(value, na.rm = TRUE), .groups = "drop"
+  )
+  ))
+
+#calculating IS for Switzerland for each section
+data_collection_switzerland <- 
+leba_H5_switzerland %>% 
+  group_by(Id,  Day, leba_col_period) %>% 
+  summarize(.groups = "drop") 
+
+metrics_H5_switzerland_IS <- 
+data$switzerland %>% 
+  full_join(data_collection_switzerland, by = c("Id", "Day")) %>% 
+  arrange(Id, Day) %>% 
+  fill(starts_with("leba_"), .direction = "up") %>% 
+  group_by(Id, leba_col_period) %>% 
+  summarize(
+    IS = interdaily_stability(MEDI, Datetime, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  rename(col_period = leba_col_period) %>%
+  pivot_longer(cols = IS, names_to = "metric", values_to = "value") %>% 
+  drop_na(value) %>% 
+  nest(data = -metric)
+
+metrics_H5_switzerland <- 
+  rbind(metrics_H5_switzerland,
+        metrics_H5_switzerland_IS)
+
+#transform the LEBA data to the appropriate format
+leba_H5_switzerland <-
+  leba_H5_switzerland %>% 
+  pivot_longer(cols = -c(Id, Day, leba_col_period), 
+               names_to = "leba", values_to = "leba_values")
+
+#join the data
+leba_light_H5_switzerland <-
+metrics_H5_switzerland %>% 
+  unnest(data) %>% 
+  rename(metric_value = value) %>%
+  left_join(leba_H5_switzerland, by = c("Id", "col_period" = "leba_col_period"),
+            relationship = "many-to-many") %>% 
+  select(-Id) %>% 
+  drop_na()
+
+
+#calculate correlations
+corr_switzerland <-
+  leba_light_H5_switzerland %>% 
+    group_by(metric, leba) %>% 
+    summarize(
+      correlation = cor(metric_value, leba_values, method = "spearman"),
+              p_value = cor.test(metric_value, leba_values)$p.value,
+              p_value_adjusted =p.adjust(p_value, method = "fdr", 
+                                         n = p_adjustment$H5),
+              significant = p_value <= 0.05,
+              significant_adjusted = p_value_adjusted <= 0.05,
+              .groups = "drop") %>%
+  mutate(      
+    question = leba_questions[leba],
+    factor = leba_factors[leba],
+    question = ifelse(is.na(question), factor, question),
+    .before = 1) %>% 
+  fill(factor) %>% 
+  left_join(metric_selectionH5, by = c("metric" = "value", "leba" = "name")) %>% 
+  mutate(hypothesised = ifelse(is.na(hypothesised), FALSE, hypothesised),
+         coloring = case_when(
+           significant_adjusted & hypothesised ~ "Hypothesised and significant",
+           significant & hypothesised ~ "Hypothesised and (unadjusted) significant",
+           significant & !hypothesised ~ "(unadjusted) Significant",
+           !significant_adjusted & hypothesised ~ "Hypothesised",
+           TRUE ~ "None"
+         ) %>% factor(levels = c("Hypothesised and significant", "Hypothesised and (unadjusted) significant", "(unadjusted) Significant", "Hypothesised", "None")
+         )) %>% 
+      mutate(
+    leba = leba %>% 
+        str_remove("leba_") %>% 
+        str_replace("_", ", ") %>% 
+        str_replace("(F[:digit:])$", "\\1 (overall)")
+  )
+
+
+#display the results
+corr_plot_switzerland <- 
+corr_switzerland %>% 
+  ggplot(aes(x = metric, y = (leba %>% factor() %>% fct_rev()), fill = abs(correlation), col = coloring)) +
+  geom_tile(data = corr_switzerland %>% filter(coloring != "None"), linewidth = 0.25) + 
+  geom_text(
+    aes(label = 
+          paste(
+            paste("c=",round(correlation, 2)), 
+            p_value %>% style_pvalue(prepend_p = TRUE), 
+            sep = "\n")
+        ),
+    size = 1.8,
+    fontface = "bold") +
+  coord_fixed() +
+  scale_fill_viridis_c(limits = c(0,1))+
+  scale_color_manual(values = colors_H5, drop = FALSE)+
+  labs(y = "LEBA questions and factors", x = "Metrics", color = "Relevance",
+       fill = "(abs) Correlation", subtitle = "Switzerland")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.subtitle = element_text(color = pal_jco()(2)[2]))
+
+corr_plot_switzerland
+
+```
+
+:::
+
+::: panel-tabset
+
+###### Combined correlation matrices
+
+```{r combined corr H5}
+#| fig-height: 20
+#| fig-width: 16
+
+#visualization
+(corr_plot_malaysia + theme(legend.position = "none")) + corr_plot_switzerland + plot_layout(guides = "collect")
+
+corr_results <- list_rbind(
+  list(malaysia = corr_malaysia, 
+       switzerland = corr_switzerland), 
+  names_to = "site")
+
+#summary of restuls
+corr_results %>% 
+  select(site, coloring) %>% 
+  tbl_summary(by = site,
+              label = list(coloring ~ "Summary of correlation matrices")) %>% 
+  as_gt() %>%
+  gt::tab_header(title = "Results for Hypothesis 5")
+
+corr_results %>% group_by(site, coloring) %>% summarize(n = n(), mean_cor = mean(abs(correlation)), max_cor = max(abs(correlation))) %>% 
+  gt() %>% 
+  tab_header("Summary of correlation coefficients by type, Hypothesis 5") %>% 
+  tab_footnote(
+    "Mean correlation is the average of the absolute correlation coefficients",
+    locations = cells_column_labels(columns = "mean_cor")
+  ) %>% 
+  tab_footnote(
+    "Max correlation is the highest absolute correlation coefficient",
+    locations = cells_column_labels(columns = "max_cor")
+  ) %>% 
+#make col labels and row labels bold
+  tab_style(
+    style = list(
+      cell_text(weight = "bold")
+    ),
+    locations = list(cells_column_labels(), cells_row_groups())
+  ) %>% 
+  cols_label(
+    coloring = "",
+    mean_cor = "Mean correlation",
+    max_cor = "Max correlation"
+  ) %>% 
+  fmt_number(
+    columns = c(mean_cor, max_cor),
+    decimals = 2
+  ) %>% 
+  text_transform(str_to_title, locations = cells_row_groups()) %>% 
+  cols_align(align = "left", columns = coloring)
+
+
+```
+
+###### Significant results in detail
+
+```{r H5 detail results}
+
+interpretation <- 
+  c("The more often 30 minutes or less are spent outside, the shorter the period above 1000 lx",
+    "The more often >3 hours per day are spent outside, the longer the period above 1000 lx",
+    "The more often > 3 hours per day are spent outside, the higher the time above 1000 lx",
+    "The more spend time outside as possible, the brighter the brightest 10 hours (mean)",
+    "The more spend time outside as possible, the longer the period above 1000 lx",
+    "The more spend time outside as possible, the higher the time above 1000 lx",
+    "The more spend time outside as possible, the higher the time above 250 lx",
+    "The more often smartwatches are looked at within 1h before attempting to fall asleep, the later the last time above 250 lx",
+    "The more an alarm with a dawn simulation light is used, the warmer the light colour temperature",
+    "The more often the lights are turned on immediately after waking up, the earlier the first time above 250 lx"
+    )
+
+corr_results %>% filter(significant_adjusted) %>% 
+  select(-c(p_value, significant, significant_adjusted, factor, coloring)) %>% 
+  mutate(across(starts_with("p_value"), style_pvalue),
+         correlation = correlation %>% round(2)) %>% 
+  arrange(leba) %>%
+  filter(hypothesised) %>% 
+  gt() %>% 
+  cols_hide(hypothesised) %>% 
+  tab_header("Summary of significant results for Hypothesis 5") %>% 
+    tab_footnote(
+      paste("p-values are adjusted for multiple comparisons using the false-discovery-rate for n=", p_adjustment$H5, "comparisons"),
+      locations = cells_column_labels(columns = "p_value_adjusted")
+    ) %>%
+    tab_footnote(
+      "Indication whether this specific combination was hypothesised in the preregistration document",
+      locations = cells_column_labels(columns = "hypothesised")
+    ) %>%
+    tab_footnote(
+      "Spearman correlation coefficient between the metric and the LEBA question/factor",
+      locations = cells_column_labels(columns = "correlation")
+    ) %>%
+  cols_label(
+    site = "Site",
+    question = "Question/Factor",
+    leba = "LEBA item",
+    correlation = "Correlation coefficient",
+    p_value_adjusted = "p-value",
+    metric = "Metric"
+  ) %>% 
+  cols_add(Interpretation = interpretation) %>% 
+  fmt(columns = leba, fns = \(x) x %>% str_remove("leba_") %>% 
+        str_replace("_", ", ")) %>% 
+  gtsave("figures/Table_1.png", vwidth = 1100)
+
+```
+
+:::
+
+The results clearly show that there are strong correlations between certain light exposure metrics and answers to the LEBA questionnaire, but only in the Swiss dataset. After adjustment for multiple comparisons, none of the correlations in the Malaysian dataset remained significant. Interestingly, the average (absolute) correlation is stronger in the Malaysia site compared to the Switzerland site, indicating a higher variance in either light exposure metrics or LEBA answers in the Malaysia dataset, compared to Switzerland. For the Swiss dataset, 10 of the hypothesised correlations proved to be significant, with on average medium effect size (Cohen 1988, 1992). For exploratory reasons, unadjusted significance levels are left in the matrices.
+
+#### Hypothesis 6
+
+**$H6$**: There is a difference between Malaysia and Switzerland on how well light-logger derived light exposure variables correlate with subjective LEBA items.
+
+The preregistration document specifies a generalized mixed model approach to test this hypothesis. As the speficied formula does not lead to to the stated number of models, i.e. 23+5, and also does not provide an overall overview of whether selected light exposure metrics correlate with LEBA items and factors, we provide an alternative approach by modelling the dependency of correlation coefficients on site, which gives a more condensed output and uses a linear model. The stricter analysis is still included in the analysis documentation.
+
+::: panel-tabset
+
+##### adjusted
+
+```{r H6 adjusted}
+
+leba_light_H6 <- 
+corr_results %>% 
+  filter(hypothesised) %>%
+  nest(data = -c(leba, question, factor)) %>% 
+  arrange(leba)
+
+#hypothesis formulas
+formula_H6 <- correlation ~ site
+formula_H0 <- correlation ~ 1
+
+inference_H6 <- 
+  leba_light_H6 %>% 
+  mutate(formula_H1 = c(formula_H6),
+         formula_H0 = c(formula_H0),
+         type = "lm",
+         family = list(gaussian()),
+         metric = leba
+         )
+
+
+inference_H6 <- 
+inference_H6 %>%
+  rowwise() %>% 
+  mutate(model = list(lm(data = data, formula = formula_H1)),
+         model0 = list(lm(data = data, formula = formula_H0)),
+         comparison = list(anova(model, model0)),
+        p.value_adj = comparison %>% tidy() %>% pull(p.value) %>% .[2] %>%
+        p.adjust(method = "fdr", n = p_adjustment$H6),
+      significant = p.value_adj <= 0.05,
+      summary = list(
+        switch(significant+1,
+               tidy(model0),
+               tidy(model)))
+  ) %>% 
+  drop_na() %>% 
+  rowwise() %>% 
+  mutate(
+    table = list(
+        tibble(
+          metric = metric,
+          p.value =
+            p.value_adj %>%
+            style_pvalue() %>%
+            {ifelse(significant, paste0("**", ., "**"),.)},
+          summary %>%
+            mutate(estimate = estimate) %>%
+            select(term, estimate) %>%
+            mutate(term = str_remove_all(term, "\\(|\\)|site")) %>% 
+            pivot_wider(names_from = term, values_from = estimate) 
+        ) %>%
+          mutate(malaysia = if(exists("switzerland")) 0 else NA, .after = Intercept)
+    )
+  )
+
+Inference_Table_H6 <- 
+inference_H6 %>% 
+  mutate(metric = leba) %>% 
+Inference_Table(p_adjustment = p_adjustment$H6, value = correlation) %>%
+  fmt_number("Intercept", decimals = 2) %>%
+  fmt_number("switzerland", decimals = 2) %>%
+  cols_align(align = "center", columns = "p.value") %>%
+  tab_header(title = "Model Results for Hypothesis 6")
+
+Inference_Table_H6
+Inference_Table_H6 %>% gtsave("figures/Table_H6.png")
+
+v1 <- inference_H6 %>% filter(significant) %>% pull(question)
+```
+
+##### preregistration
+
+```{r H6}
+#join the data
+leba_light_H6_malaysia <-
+metrics_H5_malaysia %>% 
+  unnest(data) %>% 
+  rename(metric_value = value) %>%
+  left_join(leba_H5_malaysia, by = "Id",
+            relationship = "many-to-many") %>% 
+  drop_na()
+
+#join the data
+leba_light_H6_switzerland <-
+metrics_H5_switzerland %>% 
+  unnest(data) %>% 
+  rename(metric_value = value) %>%
+  left_join(leba_H5_switzerland, by = c("Id", "col_period" = "leba_col_period"),
+            relationship = "many-to-many") %>% 
+  drop_na()
+
+#create a combined dataset with metrics and LEBA items
+light_leba_combined <-
+  list_rbind(
+  list(malaysia = leba_light_H6_malaysia, 
+       switzerland = leba_light_H6_switzerland ), 
+  names_to = "site") %>% 
+  select(-col_period, -Day) %>% 
+  nest(data = -c(metric, leba)) %>% 
+  left_join(metric_selectionH5, by = c("metric" = "value", "leba" = "name")) %>% 
+  filter(hypothesised) %>% 
+  select(-hypothesised)
+
+#hypothesis formulas
+formula_H6 <- metric_value ~ site*leba_values + (1|site:Id)
+formula_H0 <- metric_value ~ leba_values + (1|site:Id)
+
+lmer <- lme4::lmer
+
+inference_H6.2 <- 
+  light_leba_combined %>% 
+  mutate(formula_H1 = c(formula_H6),
+         formula_H0 = c(formula_H0),
+         type = "lmer",
+         family = list(gaussian())
+         )
+
+inference_H6.2 <-
+  inference_H6.2 %>% 
+  inference_summary2(p_adjustment = p_adjustment$H6)
+
+inference_H6.2 %>% 
+  rowwise() %>% 
+  mutate(metric_leba = paste(metric, leba %>% str_remove("leba_") %>% 
+                               str_replace("_", ", "), sep = " & "),
+         table = list(table %>% mutate(metric = metric_leba))) %>% 
+Inference_Table(p_adjustment = p_adjustment$H6, value = metric_value) %>%
+  fmt_number("Intercept", decimals = 2) %>%
+  fmt_number("switzerland", decimals = 2) %>%
+  cols_align(align = "center", columns = "p.value") %>%
+  tab_header(title = "Model Results for Hypothesis 6")
+```
+
+:::
+
+Overall, correlations are not significantly different between Malaysia and Switzerland. Exceptions are the following questions:
+
+-   `r v1 %>% str_c(collapse = "\n\n-  ")`
+
+## Figure and Table generation
+
+In this section, figures for the analysis are produced.
+
+```{r}
+#to save or use the analysis up to this point
+# save.image("intermediary_environment/image.RData")
+# load("intermediary_environment/image.RData")
+
+```
+
+
+### PSQI
+
+In this section, we calculate PSQI scores for both sites
+
+```{r}
+psqi_labels <- c(psqi_1 = "Subjective sleep quality",
+                 psqi_2 = "Sleep latency",
+                 psqi_3 = "Sleep duration",
+                 psqi_4 = "Habitual sleep efficiency",
+                 psqi_5 = "Sleep disturbance",
+                 psqi_6 = "Use of sleep medication",
+                 psqi_7 ="Daytime dysfunction",
+                 psqi_8 = "Global PSQI")
+
+#Malaysia
+path <- "data/Malaysia/psqi_malaysia_corrected.csv"
+
+psqi_factors <- list(
+  type1 = c("Not during the past month", "Less than once a week", "Once or twice a week", "Three or more times a week"),
+  type2 = c("No problem at all", "Only a very slight problem", "Somewhat of a problem", "A very big problem"),
+  type3 = c("Very good", "Fairly good", "Fairly bad", "Very bad"),
+  type4 = c("No bed partner or room mate", "Partner/room mate in other room", "Partner in same room but not same bed", "Partner in same bed"),
+  type5 = c("Not during the past month", "Less than once a week", "Once or twice a week", "Three ore more times a week")
+)
+
+psqi_malaysia <- 
+  read_csv(path, id = "file.path") %>% 
+  mutate(across(starts_with(c("psqi_05", "psqi_06", "psqi_07")), \(x) factor(x, psqi_factors$type1, 0:3)),
+         psqi_08 = factor(psqi_08, psqi_factors$type2, 0:3),
+         psqi_09 = factor(psqi_09, psqi_factors$type3, 0:3),
+         psqi_10 = factor(psqi_10, psqi_factors$type4, 0:3),
+         across(starts_with("psqi_11"), \(x) factor(x, psqi_factors$type5, 0:3)),
+         across(psqi_05_1:psqi_11_5, \(x) as.numeric(x)-1)
+         )
+
+psqi_malaysia_results <- 
+psqi_malaysia %>% 
+  group_by(Id, Day) %>% 
+  mutate(psqi_1 = psqi_09, .keep = "none",
+         psqi_2 = case_when(
+           psqi_02_corrected <= 15 ~ 0,
+           psqi_02_corrected <= 30 ~ 1,
+           psqi_02_corrected <= 60 ~ 2,
+           psqi_02_corrected > 60 ~ 3,
+           .default = NA),
+         psqi_2 = ((psqi_2 + psqi_05_1)-1) %/% 2 + 1,
+         psqi_3 = case_when(
+           psqi_04_corrected > 7 ~ 0,
+           psqi_04_corrected >= 6 ~ 1,
+           psqi_04_corrected >= 5 ~ 2,
+           psqi_04_corrected < 5 ~ 3,
+           .default = NA
+         ),
+         psqi_4 = (psqi_03_corrected-psqi_01_corrected)/3600,
+         psqi_4 = if_else(psqi_03_corrected < psqi_01_corrected, psqi_4 + 24, psqi_4),
+         psqi_4 = (psqi_04_corrected / as.numeric(psqi_4))*100,
+         psqi_4 = case_when(
+           psqi_4 >= 85 ~ 0,
+           psqi_4 >= 75 ~ 1,
+           psqi_4 >= 65 ~ 2,
+           psqi_4 < 65 ~ 3,
+           .default = NA
+         ),
+         psqi_5 = (sum(pick(psqi_05_2:psqi_05_10), na.rm = TRUE) - 1) %/% 9 + 1,
+         psqi_6 = psqi_06,
+         psqi_7 = ((psqi_07 + psqi_08)-1) %/% 2 + 1,
+         psqi_8 = sum(pick(psqi_1:psqi_7)),
+         across(psqi_1:psqi_7, \(x) factor(x, levels = c(0,1,2,3)))
+         )
+
+#set variable labels
+var_label(psqi_malaysia_results) <- psqi_labels %>% as.list()
+
+psqi_malaysia_result_table <- 
+psqi_malaysia_results %>% 
+  tbl_summary(by = Day, include = -Id,
+              missing_text = "missing",
+              statistic = list(psqi_8 ~ "{median} ({min},{max})")) %>% 
+  gtsummary::add_p() %>% 
+  add_significance_stars()
+
+psqi_malaysia_result_table %>% 
+  as_gt() %>% 
+  gtsave("figures/table_psqi_malaysia_results.png")
+
+
+```
+
+
+```{r}
+#Switzerland
+
+#Import the data
+leba_folders <- "data/Basel/REDCap"
+leba_file <- "REDCap_CajochenASEAN_DATA_2023-10-30_1215.csv"
+leba_files <- paste(leba_folders, leba_file, sep = "/")
+
+psqi_switzerland <- 
+  read_csv(leba_files, id = "file.path") %>% 
+  mutate(Day = parse_number(redcap_event_name)) %>% 
+  fill(code) %>% 
+  select(code, Day, contains("psqi")) %>% 
+  filter(Day %in% c(1,31)) %>% 
+  group_by(code, Day) %>% 
+  fill(everything(),.direction = "up") %>% 
+  reframe(across(everything(), first))
+
+psqi_switzerland_results <- 
+psqi_switzerland %>% 
+  group_by(code, Day) %>% 
+  mutate(psqi_1 = psqi_q6_sleepquality, .keep = "none",
+         psqi_2 = case_when(
+           psqi_q2_sleeptime <= 15 ~ 0,
+           psqi_q2_sleeptime <= 30 ~ 1,
+           psqi_q2_sleeptime <= 60 ~ 2,
+           psqi_q2_sleeptime > 60 ~ 3,
+           .default = NA),
+         psqi_2 = ((psqi_2 + psqi_q5a_notfallasleep)-1) %/% 2 + 1,
+         psqi_3 = case_when(
+           psqi_q4_sleephrs/3600 > 7 ~ 0,
+           psqi_q4_sleephrs/3600 >= 6 ~ 1,
+           psqi_q4_sleephrs/3600 >= 5 ~ 2,
+           psqi_q4_sleephrs/3600 < 5 ~ 3,
+           .default = NA
+         ),
+         psqi_4 = (psqi_q3_getuptime-psqi_q1_bedtime)/3600,
+         psqi_4 = if_else(psqi_q3_getuptime < psqi_q1_bedtime, psqi_4 + 24, psqi_4),
+         psqi_4 = (psqi_q4_sleephrs/3600 / as.numeric(psqi_4))*100,
+         psqi_4 = case_when(
+           psqi_4 >= 85 ~ 0,
+           psqi_4 >= 75 ~ 1,
+           psqi_4 >= 65 ~ 2,
+           psqi_4 < 65 ~ 3,
+           .default = NA
+         ),
+         psqi_5 = (sum(pick(psqi_q5b_earlyawake:psqi_q5j_other)) - 1) %/% 9 + 1,
+         psqi_6 = psqi_q7_sleepmed,
+         psqi_7 = ((psqi_q8_staywake + psqi_q9_dailytasks)-1) %/% 2 + 1,
+         psqi_8 = sum(pick(psqi_1:psqi_7)),
+         across(psqi_1:psqi_7, \(x) factor(x, levels = c(0,1,2,3)))
+         )
+
+#set variable labels
+var_label(psqi_switzerland_results) <- psqi_labels %>% as.list()
+
+psqi_switzerland_result_table <- 
+psqi_switzerland_results %>% 
+  tbl_summary(by = Day, include = -code,
+              missing_text = "missing",
+              statistic = list(psqi_8 ~ "{median} ({min},{max})")) %>% 
+  gtsummary::add_p() %>% 
+  add_significance_stars()
+
+psqi_switzerland_result_table %>% 
+  as_gt() %>% 
+  gtsave("figures/table_psqi_switzerland_results.png")
+
+```
+
+```{r}
+#combined results
+psqi_data <- 
+list(
+  Malaysia = psqi_malaysia_results %>% ungroup() %>% filter(Day == 31) %>% select(-Id, -Day),
+  Switzerland = psqi_switzerland_results %>% ungroup() %>% filter(Day == 31) %>% select(-code, -Day)
+) %>% 
+  list_rbind(names_to = "site")
+
+var_label(psqi_data) <- psqi_labels %>% as.list()
+
+psqi_data %>% 
+  tbl_summary(by = site,
+              missing_text = "missing",
+              type = list(psqi_8 ~ "continuous"),
+              statistic = list(psqi_8 ~ "{median} ({min},{max})")) %>% 
+  gtsummary::add_p() %>% 
+  add_significance_stars() %>% 
+  as_gt() %>% 
+  gtsave("figures/table_psqi_Day31_results.png")
+
+psqi_data <- 
+list(
+  Malaysia = psqi_malaysia_results %>% ungroup() %>% filter(Day == 1) %>% select(-Id, -Day),
+  Switzerland = psqi_switzerland_results %>% ungroup() %>% filter(Day == 1) %>% select(-code, -Day)
+) %>% 
+  list_rbind(names_to = "site")
+
+var_label(psqi_data) <- psqi_labels %>% as.list()
+
+psqi_data %>% 
+  tbl_summary(by = site,
+              missing_text = "missing",
+              type = list(psqi_8 ~ "continuous"),
+              statistic = list(psqi_8 ~ "{median} ({min},{max})")) %>% 
+  gtsummary::add_p() %>% 
+  add_significance_stars() %>% 
+  as_gt() %>% 
+  gtsave("figures/table_psqi_Day01_results.png")
+
+
+```
+
+### Tables Descriptives
+
+
+```{r}
+#| warning: false
+
+#data preparation
+metrics$data[[14]] <- metrics$data[[14]] %>% mutate(value = log10(MEDI))
+
+metric_descriptive <- 
+metrics %>%
+  rowwise() %>% 
+  mutate(data = list(data %>% 
+           group_by(site) %>% 
+           select(site, value)
+         )
+  ) %>% 
+  filter(metric != "mean") %>% 
+  unnest(data) %>% 
+  mutate(site = site %>% fct_relabel(str_to_title)) %>% 
+  group_by(metric, site) %>% 
+  mutate(number = seq_along(value)) %>% 
+  pivot_wider(names_from = site,
+              values_from = value,
+              values_fill = NA) %>% 
+  select(-number)
+
+#table generation
+table_metrics_descriptive <- 
+metric_descriptive %>% 
+  summarize(across(everything(), 
+                   list(
+                    mean = \(x) mean(x, na.rm = TRUE),
+                    sd = \(x) sd(x, na.rm = TRUE),
+                    n = \(x) x[!is.na(x)] %>% length())
+                   )
+  ) %>% 
+  mutate(
+    difference = Malaysia_mean - Switzerland_mean
+  ) %>% 
+  gt(rowname_col = "metric") %>% 
+  fmt_number(ends_with(c("mean", "sd", "difference")), n_sigfig = 3) %>%
+  fmt_number(ends_with(c("mean", "sd", "difference")), decimals = 0,
+             rows = c("FLiT1000", "FLiT250", "FcT250", "LE", 
+                      "PAT1000")) %>% 
+  fmt_number(ends_with("_n"), decimals = 0) %>% 
+  fmt_scientific(ends_with(c("mean", "sd", "difference")),
+                 rows = "SCmelEDI") %>% 
+  fmt_duration(ends_with(c("mean", "sd", "difference")), 
+               input_units = "seconds", duration_style = "colon-sep",
+               output_units = c("hours", "minutes"),
+           rows = 
+             c("LLiT10", "LLiT250")
+           ) %>% 
+  fmt_duration(ends_with(c("mean", "sd", "difference")), 
+               input_units = "seconds", duration_style = "narrow",
+               output_units = c("hours", "minutes"),
+           rows = 
+             c("TAT1000", "TAT250", "TATd250", "TBTe10")
+           ) %>% 
+  tab_spanner(columns = contains(c("Malaysia")), label = "Malaysia") %>% 
+  tab_spanner(columns = contains(c("Switzerland")), label = "Switzerland") %>% 
+  cols_label(
+    difference ~ "Difference M-S",
+    contains("_mean") ~ "Mean",
+    contains("_sd") ~ "SD",
+    contains("_n") ~ "n"
+  ) %>% 
+  tab_style(locations = list(
+                cells_body(columns = contains(c("_mean", "difference"))),
+                cells_column_labels(),
+                cells_column_spanners(),
+                cells_stub()
+                ),
+                 style = cell_text(weight = "bold")) %>% 
+    tab_style(
+      style = cell_text(color = pal_jco()(1)),
+      locations = cells_column_spanners(1)
+    ) %>% 
+    tab_style(
+      style = cell_text(color = pal_jco()(2)[2]),
+      locations = cells_column_spanners(2)
+    ) %>% 
+    cols_add(Plot = NA) %>% 
+    cols_label(Plot = "Boxplot") %>% 
+    text_transform(locations = cells_body(Plot),
+                   fn = \(x) {
+                       gt::ggplot_image(
+                         {
+                           metric_descriptive$metric %>% 
+                             unique() %>%
+                             map(\(x) {
+                               metric_descriptive %>%
+                                 pivot_longer(-metric, names_to = "site", values_to = "value") %>%
+                                 filter(metric == x) %>%
+                                 ggplot(aes(x = site, y = value, fill = site)) +
+                                 geom_boxplot() +
+                                 theme_void() +
+                                 theme(legend.position = "none") +
+                                 scale_fill_jco() +
+                                 coord_flip()
+                             })
+                           
+                         },
+                         height = gt::px(50), aspect_ratio = 2
+                       )
+                   }) %>%
+  tab_footnote("values were log10 transformed", 
+               locations = cells_stub(c("L5m", "L5mde", "L5mn", "M10m", "MEDI")))
+
+table_metrics_descriptive
+
+gtsave(table_metrics_descriptive, "figures/Table_Metrics_Descriptive.png")
+
+```
+
+
+### Tables Hypothesis results
+
+```{r}
+
+H1_table %>% 
+    cols_add(Plot2 = 1:nrow(inference_H1)) %>% 
+    cols_hide(Plot) %>% 
+    cols_label(Plot2 = "") %>% 
+    text_transform(locations = cells_body(Plot2),
+                   fn = \(x) {
+                       gt::ggplot_image(
+                         boxplot_function(as.numeric(x),inference_H1, value_dc),
+                         height = gt::px(50),
+                         aspect_ratio = 2
+                         )
+                   }) %>% 
+  gtsave("figures/Table_H1.png")
+
+H2_table_timing %>% 
+    cols_add(Plot2 = 1:nrow(inference_H2)) %>% 
+    cols_hide(Plot) %>% 
+    cols_label(Plot2 = "") %>% 
+    text_transform(locations = cells_body(Plot2),
+                   fn = \(x) {
+                       gt::ggplot_image(
+                         boxplot_function(as.numeric(x),inference_H2, value),
+                         height = gt::px(50),
+                         aspect_ratio = 2
+                         )
+                   }) %>% 
+  gtsave("figures/Table_H2_timing.png")
+
+
+H2_table_interaction %>% 
+  cols_width(
+    metric ~ px(440),
+    Day ~ px(120),
+    p.value ~ px(120)
+  ) %>% 
+  gtsave("figures/Table_H2_interaction.png")
+
+```
+
+### Figure 1 Overview
+
+```{r}
+
+# data preparation
+data_combined <-
+  join_datasets(add.origin = TRUE,
+                Malaysia = data$malaysia %>%
+  mutate(across(c(Datetime, dusk, dawn), \(x) force_tz(x, "UTC"))),
+  Switzerland = data$switzerland %>%
+  mutate(across(c(Datetime, dusk, dawn), \(x) force_tz(x, "UTC")))
+  ) %>%
+  rename(site = dataset) %>%
+  group_by(site, Id) %>%
+  mutate(Id = fct_relabel(Id, \(x) str_remove(x, "ID|MY0")),
+         Id = factor(Id, levels = sprintf("%02d",1:20)))
+
+data_combined_original <-
+  join_datasets(add.origin = TRUE,
+                Malaysia = data_malaysia %>%
+  mutate(across(c(Datetime), \(x) force_tz(x, "UTC"))),
+  Switzerland = data_switzerland %>%
+  mutate(across(c(Datetime), \(x) force_tz(x, "UTC")))
+  ) %>%
+  rename(site = dataset) %>%
+  group_by(site, Id) %>%
+  mutate(Id = fct_relabel(Id, \(x) str_remove(x, "ID|MY0")),
+         Id = factor(Id, levels = sprintf("%02d",1:20)))
+
+Photoperiods_combined <- 
+data_combined %>% 
+  group_by(site, Id, Day) %>% 
+  filter(!marked_for_removal) %>%
+  select(site, Id, Day, photoperiod_duration) %>%
+  summarize(
+    photoperiod_duration = first(photoperiod_duration)
+  )
+
+data_1day <-
+  data_combined %>%
+  mutate(site = factor(site),
+         dawn = hms::as_hms(dawn),
+         dusk = hms::as_hms(dusk)) %>% 
+  group_by(site) %>% 
+  filter(!marked_for_removal) %>%
+  select(site, Id, Datetime, MEDI, dusk, dawn) %>%
+  aggregate_Date(
+    unit = "15 mins",
+    # unit = "5 mins",
+    mean_MEDI = mean(log10(MEDI), na.rm = TRUE),
+    numeric.handler = \(x) median(x, na.rm = TRUE),
+    lower100 = min(MEDI, na.rm = TRUE),
+    lower95 = quantile(MEDI, 0.025, na.rm = TRUE),
+    lower75 = quantile(MEDI, 0.125, na.rm = TRUE),
+    lower50 = quantile(MEDI, 0.25, na.rm = TRUE),
+    upper50 = quantile(MEDI, 0.75, na.rm = TRUE),
+    upper75 = quantile(MEDI, 0.875, na.rm = TRUE),
+    upper95 = quantile(MEDI, 0.975, na.rm = TRUE),
+    upper100 = max(MEDI, na.rm = TRUE),
+    dawn = mean(dawn),
+    dusk = mean(dusk),
+    date.handler = \(x) as_date("1970-01-01")
+  )
+
+data_1day$dusk <- 
+  data_1day$dusk %>% 
+  hms::as_hms() %>% 
+  {paste("1970-01-01", .)} %>% 
+  parse_date_time(orders ="ymdHMS")
+data_1day$dawn <- 
+  data_1day$dawn %>% 
+  hms::as_hms() %>% 
+  {paste("1970-01-01", .)} %>% 
+  parse_date_time(orders ="ymdHMS")
+
+photoperiod_1day <-
+  data_1day %>%
+  summarize(dawn = first((dawn)),
+            dusk = first((dusk)),
+            .groups = "drop")
+
+hlinelabel <-
+  expand_grid(
+    site = c("Malaysia", "Switzerland"),
+    values = c(1, 10, 250)
+  )
+
+```
+
+```{r}
+#preparing P5 comparison
+singular_plot <-  
+  data_1day %>% 
+  ungroup() %>%
+  gg_doubleplot(
+    geom = "line", jco_color = FALSE, col = "black",
+    alpha = 1) +
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = as_datetime("1970-01-01", tz = "UTC"),
+       xmax = dawn, ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = dusk, xmax = (dawn + ddays(1)), ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = dusk + ddays(1),
+       xmax = as_datetime("1970-01-03", tz = "UTC"),
+       ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  facet_wrap(~ site, ncol = 1) +
+  theme(plot.subtitle = element_textbox_simple(padding = margin(b=10)))
+
+singular_plot <- 
+singular_plot +
+  # geom_ribbon(aes(ymin = lower100, ymax = upper100, fill = site), alpha = 0.4) +
+  geom_ribbon(aes(ymin = lower95, ymax = upper95, fill = site), alpha = 0.4) +
+  geom_ribbon(aes(ymin = lower75, ymax = upper75, fill = site), alpha = 0.4) +
+  geom_ribbon(aes(ymin = lower50, ymax = upper50, fill = site), alpha = 0.4) +
+  theme(panel.spacing.x = unit(2.5, "lines")) +
+  scale_color_jco()+
+  scale_fill_jco()
+
+singular_plot$layers <-
+  c(singular_plot$layers[2:7], singular_plot$layers[1])
+
+singular_plot <-
+singular_plot +
+  map(c(1, 10, 250), 
+      \(x) geom_hline(aes(yintercept = !!x), linetype = 2, , alpha = 0.25)
+      ) +
+  geom_label(data = hlinelabel, aes(y = values, label = values,
+                                    x = as_datetime("1970-01-01 04:00:00", 
+                                                    tz = "UTC")),
+             size = 2.5)
+
+```
+
+
+```{r}
+#P1
+#Image of Protocol
+path <- "images/2024.12.05.ASEAN-Study-Design_v1.6.png"
+P1 <- 
+ggdraw() +
+  draw_image(path)
+
+#P2
+#Timeframe of data collection
+P2 <- 
+data_combined_original %>% 
+  filter(!is.na(MEDI)) %>% 
+  mutate(Id = fct_rev(Id)) %>% 
+  gg_overview() +
+  # scale_y_discrete(labels = NULL) +
+  scale_x_datetime(date_breaks = "1 month",
+                   date_labels = "%b %y") +
+  aes(col = site) +
+  labs(y = "Participant ID") +
+  scale_color_jco() +
+  theme(legend.position = "none",
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+#P3
+#Locations
+source("scripts/Worldmap.R", local = TRUE)
+P3 <- 
+P3 + labs(x=NULL, y = NULL)
+
+#P4
+#Photoperiods
+
+P4 <- 
+Photoperiods_combined %>% 
+  mutate(site = factor(site)) %>% 
+  ggplot() +
+  aes(x = photoperiod_duration,
+      y = fct_rev(site),
+      fill = site,
+      col = site) +
+  geom_boxplot(alpha = 0.75)+
+  scale_fill_jco() +
+  scale_color_jco()+
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.y = element_blank()) +
+  labs(y = "", x = "Photoperiod duration (h)")
+
+#P5
+#average Daily pattern
+P5 <- 
+singular_plot + 
+  theme_minimal()+
+  theme(legend.position = "none",
+        strip.text = element_blank()) +
+  labs(y = "Melanopic illuminance (lx, mel EDI)", x = "Local time (HH:MM)")
+
+
+#composit
+
+P1/ (P3 + P2) / (P4 + P5 + plot_layout(widths = c(1, 2))) +
+  plot_annotation(tag_levels = 'A') +
+  plot_layout(guides = "collect", heights = c(3,2,2)) &
+  theme(axis.title = element_text(size = 10),
+        axis.text = element_text(size = 10),
+        plot.tag = element_text(size = 20, face = "plain")) 
+
+ggsave("figures/Figure_1.pdf", width = 17, height = 15, scale = 2, units = "cm")
+
+# P5 + theme(plot.margin = margin(10,20,10,10),
+#            axis.title = element_text(size = 12),
+#         axis.text = element_text(size = 12))
+# ggsave("figures/Average_Day.pdf", width = 8, height = 6, scale = 2, units = "cm")
+
+```
+
+
+
+### Figure 2 Average day
+
+```{r average day}
+
+data_1day <-
+  data_combined %>%
+  mutate(site = factor(site),
+         dawn = hms::as_hms(dawn),
+         dusk = hms::as_hms(dusk)) %>% 
+  filter(!marked_for_removal) %>%
+  select(site, Id, Datetime, MEDI, dusk, dawn) %>%
+  aggregate_Date(
+    unit = "15 mins",
+    mean_MEDI = mean(log10(MEDI), na.rm = TRUE),
+    sd_MEDI = sd(log10(MEDI), na.rm = TRUE),
+    cv_MEDI = sd_MEDI/mean_MEDI,
+    numeric.handler = \(x) median(x, na.rm = TRUE),
+    lower95 = quantile(MEDI, 0.025, na.rm = TRUE),
+    lower75 = quantile(MEDI, 0.125, na.rm = TRUE),
+    lower50 = quantile(MEDI, 0.25, na.rm = TRUE),
+    upper50 = quantile(MEDI, 0.75, na.rm = TRUE),
+    upper75 = quantile(MEDI, 0.875, na.rm = TRUE),
+    upper95 = quantile(MEDI, 0.975, na.rm = TRUE),
+    dawn = mean(dawn, na.rm = TRUE),
+    dusk = mean(dusk, na.rm = TRUE),
+    date.handler = \(x) as_date("1970-01-01"),
+    
+  )
+
+data_1day$dusk <- 
+  data_1day$dusk %>% 
+  hms::as_hms() %>% 
+  {paste("1970-01-01", .)} %>% 
+  parse_date_time(orders ="ymdHMS")
+data_1day$dawn <- 
+  data_1day$dawn %>% 
+  hms::as_hms() %>% 
+  {paste("1970-01-01", .)} %>% 
+  parse_date_time(orders ="ymdHMS")
+
+IS_data <- 
+  metrics$data[metrics$metric == "IS"][[1]] %>% 
+  mutate(Id = fct_relabel(Id, \(x) str_remove(x, "ID|MY0")),
+         Id = factor(Id, levels = sprintf("%02d",1:20))) %>% 
+  mutate(site = site %>% fct_relabel(str_to_title))
+
+```
+
+```{r double plot}
+#| fig-height: 27
+#| fig-width: 15
+
+
+photoperiod_1day <-
+  data_1day %>%
+  summarize(dawn = first((dawn)),
+            dusk = first((dusk)),
+            .groups = "drop")
+
+hlinelabel <-
+  expand_grid(
+    site = c("Malaysia", "Switzerland"),
+    Id =  sprintf("%02d", 1:20),
+    values = c(1, 10, 250)
+  ) %>%
+  filter(!(site == "Malaysia" & Id == "06"))
+
+facet_names <- c(Malaysia = "Kuala Lumpur, Malaysia", 
+                 Switzerland = "Basel, Switzerland")
+
+singular_plot <-  
+  data_1day %>% 
+  ungroup() %>% 
+  gg_doubleplot(
+    geom = "line", jco_color = FALSE, facetting = FALSE, col = "black",
+    alpha = 1,
+    y.axis.breaks = c(0, 1, 10, 1000, 100000)) +
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = as_datetime("1970-01-01", tz = "UTC"),
+       xmax = dawn, ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = dusk, xmax = (dawn + ddays(1)), ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  geom_rect(data = photoperiod_1day,
+   aes(xmin = dusk + ddays(1),
+       xmax = as_datetime("1970-01-03", tz = "UTC"),
+       ymin = -Inf, ymax = Inf), alpha = 0.25)+
+  facet_grid2(Id ~ site, switch = "y",
+             labeller = labeller(site = facet_names),
+             strip = 
+               strip_themed(background_x = elem_list_rect(fill = pal_jco()(2)))) +
+  labs(fill = "Percentiles", 
+       title = "Double plots of average days per participant ID and site",
+       subtitle = 
+         "Median and percentiles of light exposure per 15 minutes (<span style='color:#ee0000;'>95%</span>, <span style='color:#ee0000CC;'>75%</span>, and <span style='color:#ee0000AA;'>50%</span> of data shown in ribbons). Grey backgrounds indicate (civil) nighttime. "
+       )+
+  theme(plot.subtitle = element_textbox_simple(padding = margin(b=10)))
+
+singular_plot <- 
+singular_plot +
+  geom_ribbon(aes(ymin = lower95, ymax = upper95), fill = "red2", alpha = 0.25) +
+  geom_ribbon(aes(ymin = lower75, ymax = upper75), fill = "red2", alpha = 0.25) +
+  geom_ribbon(aes(ymin = lower50, ymax = upper50), fill = "red2", alpha = 0.25) +
+    geom_label(data = IS_data,
+            aes(x = as_datetime("1970-01-03", tz = "UTC") - dminutes(30), 
+                y = 10^5, label = paste("IS =", value %>% round(2), "")),
+            hjust = 1,
+            vjust = 1,
+            alpha = 0.75
+            ) +
+  theme(panel.spacing.x = unit(2.5, "lines")) +
+  ggplot2::scale_y_continuous(trans = "symlog", 
+    breaks = c(0, 10^(0:5)), labels = 
+      c("0", "", "10", "", "1 000", "", "100 000")
+  )
+
+singular_plot$layers <-
+  c(singular_plot$layers[2:8], singular_plot$layers[1])
+
+singular_plot <-
+singular_plot +
+  map(c(1, 10, 250), 
+      \(x) geom_hline(aes(yintercept = !!x), linetype = 2, , alpha = 0.25)
+      ) +
+  geom_label(data = hlinelabel, aes(y = values, label = values,
+                                    x = as_datetime("1970-01-01 04:00:00", 
+                                                    tz = "UTC")),
+             size = 2.5) +
+  labs(x = "Local time (HH:MM)", y = "Melanopic illuminance (lx, mel EDI)")
+  
+
+singular_plot
+
+ggsave("figures/Figure_2.pdf", singular_plot, 
+       width = 17, height = 25, units = "cm",scale = 2)
+
+```
+
+### Figure 3 Daily patterns
+
+```{r Fig3}
+
+
+light_pattern <-
+plot_smooth(
+  Pattern_model,
+  view = "Time",
+  plot_all = "site",
+  rug = F,
+  n.grid = 90,
+  col = pal_jco()(2),
+  rm.ranef = "s(Id)",
+  sim.ci = TRUE,
+  )
+
+light_pattern_diff <- 
+plot_diff(Pattern_model,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          comp = list(site = c("malaysia", "switzerland")),
+          sim.ci = TRUE,
+          n.grid = 10000)
+
+light_pattern_individuals <- 
+plot_smooth(
+  Pattern_modelm1,
+  view = "Time",
+  plot_all = "Id",
+  rm.ranef = FALSE,
+  se = 0,
+  rug = F,
+  n.grid = 90,
+  col = c(rep(colors_pattern[1], 19),rep(colors_pattern[2], 20)),
+  sim.ci = TRUE
+  )
+
+time_labels <- c("00:00", "06:00", "12:00", "18:00", "24:00")
+
+P1 <- 
+light_pattern$fv %>% 
+  mutate(site = str_to_title(site)) %>% 
+  ggplot(aes(x = Time*60*60, y = fit, col = site)) +
+  geom_ribbon(aes(ymin = ll, ymax = ul, fill = site), alpha = 0.25, col = NA)+
+  geom_line() +
+  theme_minimal() +
+  scale_color_jco()+
+  scale_fill_jco()+
+  labs(y = "Model fit with 95% CI, log10(mel EDI, lx)", x = "Local Time (HH:MM)", 
+       color = "Site", fill = "Site") +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels
+               )
+
+label_sig <- "Credible non-\nzero difference"
+
+P2 <- 
+light_pattern_diff %>% 
+  mutate(significant = (est-sim.CI < 0) & (0 < est + sim.CI)) %>% 
+  ggplot(aes(x = Time*60*60, y = est, group = consecutive_id(significant) )) +
+  geom_ribbon(aes(ymin = est-sim.CI, ymax = est+sim.CI, fill = !significant), 
+              alpha = 0.25, col = NA)+
+  geom_line(aes(col = !significant)) +
+  geom_hline(aes(yintercept = 0)) +
+  theme_minimal() +
+  labs(y = "Fitted difference smooth with 95% CI", x = NULL,
+       col = label_sig, fill = label_sig) +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels)
+
+P3 <- 
+light_pattern_individuals$fv %>% 
+  mutate(site = str_detect(Id, "MY"),
+         site = if_else(site, "Malaysia", "Switzerland")) %>% 
+  ggplot(aes(x = Time*60*60, y = fit, col = site, group = Id)) +
+  # geom_ribbon(aes(ymin = ll, ymax = ul, fill = site), alpha = 0.25, col = NA)+
+  geom_line() +
+  theme_minimal() +
+  scale_color_jco()+
+  scale_fill_jco()+
+  labs(y = "Model fit, log10(mel EDI, lx)", x = NULL, col = "Site", fill = "Site") +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels) +
+  theme(legend.position = "none")
+
+(P3 + P1 + P2) +
+  plot_annotation(tag_levels = "A") +
+  plot_layout(guides = "collect")
+
+
+ggsave("figures/Figure_3.pdf", 
+       width = 17, height = 7, units = "cm", scale = 1.6)
+
+
+```
+
+
+### Figure 4 Correlation Matrix
+
+```{r Fig4}
+
+#visualization
+(corr_plot_malaysia + theme(legend.position = "none")) + 
+  (corr_plot_switzerland) + 
+  # plot_layout(guides = "collect")+
+  theme(legend.position = "bottom",
+        legend.justification = c(1,1))
+  
+
+ggsave("figures/Figure_4.pdf", 
+       width = 25, height = 17, units = "cm", scale = 1.6)
+
+```
+
+
+
+### S1 Missing time: Bootstrap results
+
+```{r S1 Missing time}
+
+bootstrap_0 <- 
+bootstrap_comparison %>% 
+  filter(threshold == 1) %>% 
+  mutate(across(contains("bs"), \(x) mean),
+         threshold = 0)
+
+bootstrap_0 %>% 
+  rbind(bootstrap_comparison) %>%
+  ggplot(aes(x = threshold)) +
+    geom_ribbon(aes(ymin = (mean - 2*se), ymax = (mean + 2*se)), 
+                fill = "steelblue", alpha = 0.4) +
+  geom_hline(data = subset_metrics, aes(yintercept=mean), color = "steelblue") +
+  geom_errorbar(
+    aes(ymin = lower_bs1, ymax = upper_bs1), linewidth = 0.5, width = 0) +
+  geom_errorbar(aes(ymin = lower_bs2, ymax = upper_bs2), 
+                linewidth = 0.25, width = 0) +
+  geom_point(aes(y=mean_bs, 
+                 col = ((mean - 2*se) <= lower_bs3 & upper_bs3 <= (mean + 2*se)))) +
+  facet_wrap(Id~metric, scales = "free") +
+  theme_minimal() +
+  labs(x = "Hours missing from the day", y = "Metric value", col = "Within Range") +
+  theme(legend.position = "bottom") +
+  coord_cartesian(xlim = c(0, 21), expand = FALSE, clip = FALSE) +
+  geom_text(
+    data = 
+      bootstrap_comparison %>% 
+      filter((mean - 2*se) <= lower_bs3 & upper_bs3 <= (mean + 2*se)) %>% 
+      group_by(metric, Id) %>% 
+      filter(threshold == max(threshold)),
+    aes(label = threshold, x = threshold, y = mean_bs),
+    size = 2.5,
+  )
+
+ggsave("figures/Figure_S1.pdf", 
+       width = 10, height = 7, units = "cm", scale = 2)
+
+```
+
+## Session Info
+
+```{r session info}
+sessionInfo()
+```
+
