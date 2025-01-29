@@ -33,9 +33,9 @@
     },
     "Hmisc": {
       "Package": "Hmisc",
-      "Version": "5.2-1",
+      "Version": "5.2-2",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "Formula",
         "R",
@@ -57,7 +57,7 @@
         "rpart",
         "viridis"
       ],
-      "Hash": "f0cc53d252666c65b2fc1f7ad88491ac"
+      "Hash": "ce88f29ff07b63c77f9b7ac747b9321b"
     },
     "KernSmooth": {
       "Package": "KernSmooth",

@@ -7,10 +7,11 @@ Inf_plots <- function(...){
 }
 
 Inf_plots1 <- function(Model, Data){
-  Model %>% residuals() %>%
-    DescTools::PlotQQ(main = "Q-Q-Plot (Residuals)")
+  Model %>% residuals() |> as_tibble() |> ggplot(aes(sample = value)) + 
+    stat_qq() + stat_qq_line() + labs(title = "Q-Q-Plot (Residuals)")
   Model %>% ranef() %>% .$`site:Id` %>% pull(`(Intercept)`) %>%
-    DescTools::PlotQQ(main = "Q-Q-Plot (Random Effects)")
+    as_tibble() |> ggplot(aes(sample = value)) + 
+    stat_qq() + stat_qq_line() + labs(title = "Q-Q-Plot (Random Effects)")
   
 }
 
