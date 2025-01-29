@@ -105,7 +105,7 @@ p_load(packages, character.only = TRUE)
 #source functions
 source("functions/missing_data_table.R")
 source("functions/data_sufficient.R")
-source("functions/Photoperiod.R")
+source("functions/photoperiod.R")
 source("functions/table_lmer.R")
 source("functions/Inf_plots.R")
 source("functions/inference.R")

@@ -26,6 +26,7 @@ Figures and tables, created as part of the analysis, and published with the manu
 
 ## Reproduce results
 
+The best way to reproduce the results is to clone this repository to a local directory. Scripts depend on data and folders in the same directory structure as provided in this repository.
 Results can be reproduced by executing the R script `RUN_ME.R`. Executing the script will perform the following actions:
 
 - loading the custom function `check_renv_status`

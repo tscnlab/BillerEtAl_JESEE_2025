@@ -5,7 +5,7 @@ if(!require(renv)) {
   install.packages("renv") 
 }
 
-renv::restore()
+renv::restore(prompt = FALSE)
 
 check_renv_status()
 
