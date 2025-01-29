@@ -90,7 +90,7 @@ The following packages are used for analysis
 packages <- c("quarto", "tidyverse", "cowplot", "gt", "gtsummary", 
               "patchwork", "readxl", "ggsci", "ggcorrplot", "LightLogR",
               "rlang", "suntools", "lme4", "lmerTest", "broom.mixed",
-              "DescTools", "lattice", "magrittr", "mgcv", "itsadug",
+              "lattice", "magrittr", "mgcv", "itsadug",
               "labelled", "ordinal", "ggtext", "cowplot", "magick", "ggh4x",
               "rnaturalearthdata")
 
