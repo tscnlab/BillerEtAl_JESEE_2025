@@ -1,5 +1,6 @@
 # Pakete laden
 library(rnaturalearth)
+library(rnaturalearthdata)
 library(sf)
 
 # install.packages("rnaturalearthdata")

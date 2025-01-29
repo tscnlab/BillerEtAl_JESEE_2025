@@ -87,20 +87,30 @@ The following packages are used for analysis
 #| label: setup
 
 #collect all the packages that are needed for the analysis
-packages <- c("quarto", "tidyverse", "cowplot", "gt", "gtsummary", 
-              "patchwork", "readxl", "ggsci", "ggcorrplot", "LightLogR",
-              "rlang", "suntools", "lme4", "lmerTest", "broom.mixed",
-              "lattice", "magrittr", "mgcv", "itsadug",
-              "labelled", "ordinal", "ggtext", "cowplot", "magick", "ggh4x",
-              "rnaturalearthdata")
-
-#check if packages are installed, if not install them
-if(!require(pacman)) {
-  install.packages("pacman") 
-  library(pacman)
-}
-
-p_load(packages, character.only = TRUE)
+library(tidyverse)
+library(cowplot)
+library(gt)
+library(gtsummary)
+library(patchwork)
+library(readxl)
+library(ggsci)
+library(ggcorrplot)
+library(LightLogR)
+library(rlang)
+library(suntools)
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+library(lattice)
+library(magrittr)
+library(mgcv)
+library(itsadug)
+library(labelled)
+library(ordinal)
+library(ggtext)
+library(magick)
+library(ggh4x)
+library(rnaturalearthdata)
 
 #source functions
 source("functions/missing_data_table.R")
