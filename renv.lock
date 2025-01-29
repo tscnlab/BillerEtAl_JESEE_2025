@@ -9,6 +9,13 @@
     ]
   },
   "Packages": {
+    "AsioHeaders": {
+      "Package": "AsioHeaders",
+      "Version": "1.22.1-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "85bf3bd8fa58da21a22d84fd4f4ef0a8"
+    },
     "DBI": {
       "Package": "DBI",
       "Version": "1.2.3",
@@ -422,6 +429,26 @@
         "utils"
       ],
       "Hash": "0e14e01ce07e7c88fd25de6d4260d26b"
+    },
+    "chromote": {
+      "Package": "chromote",
+      "Version": "0.4.0",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R6",
+        "curl",
+        "fastmap",
+        "jsonlite",
+        "later",
+        "magrittr",
+        "processx",
+        "promises",
+        "rlang",
+        "utils",
+        "websocket"
+      ],
+      "Hash": "1327bc3ec8e3052b09889fc87de93470"
     },
     "class": {
       "Package": "class",
@@ -2668,6 +2695,34 @@
         "R"
       ],
       "Hash": "fea474d578b1cbcb696ae6ac8bdcc439"
+    },
+    "webshot2": {
+      "Package": "webshot2",
+      "Version": "0.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "callr",
+        "chromote",
+        "later",
+        "magrittr",
+        "promises"
+      ],
+      "Hash": "701b4be1af8d359271f82cb240853693"
+    },
+    "websocket": {
+      "Package": "websocket",
+      "Version": "1.4.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "AsioHeaders",
+        "R6",
+        "cpp11",
+        "later"
+      ],
+      "Hash": "e77c5569354172d0d04d54a9dec89e33"
     },
     "withr": {
       "Package": "withr",

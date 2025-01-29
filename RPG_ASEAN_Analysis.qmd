@@ -110,6 +110,7 @@ library(ordinal)
 library(ggtext)
 library(magick)
 library(ggh4x)
+library(webshot2)
 library(rnaturalearthdata)
 
 #source functions
