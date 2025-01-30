@@ -40,4 +40,4 @@ Results can be reproduced by executing the R script `RUN_ME.R`. Executing the sc
 
 *Note 1: The script requires a **chrome** or **chromium browser** to be installed on the system. Please ensure that such a browser is installed prior to execution. After a fresh install of the browser, restarting the system is suggested. The browser is used in a headless mode by the {webshot2} package through the {chromote} package, whenever `gt_save()` is called to save a table. Without chrome the script will stop with an error.*
 
-*Note 2: The package versions in the `renv.lock` file were tested against a fresh install of R and RStudio on a M4 MacBook Pro running MacOS Sequoia, a virtual machine running Windows 11 ARM, and Posit Cloud running Ubuntu 20.04 (Focal). Test runs were made on `30 January 2025`. If packages fail to install upon reproduction. * 
+*Note 2: The package versions in the `renv.lock` file were tested against a fresh install of R and RStudio on a M4 MacBook Pro running MacOS Sequoia, a virtual machine running Windows 11 ARM, and Posit Cloud running Ubuntu 20.04 (Focal). Test runs were made on `30 January 2025`. If packages fail to install upon reproduction.* 
