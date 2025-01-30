@@ -6,6 +6,8 @@ This repository provides the data and the analysis documentation to the publicat
 
 In short, light exposure was measured in Basel, Switzerland, and Kuala Lumpur, Malaysia, for one month in 20 individuals per site. Additionally, questionnaires on sleep (PSQI) and light exposure behaviour ([LEBA](https://leba-instrument.org)) were collected at specified times.
 
+The R code in this repository is publicly accessible under the [MIT](https://opensource.org/license/mit) license. The data is accessible under the [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license.  
+
 ## Relevant documents
 
 **Data**: 
