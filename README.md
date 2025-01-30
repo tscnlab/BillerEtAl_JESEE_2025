@@ -1,3 +1,5 @@
+<img src="https://github.com/tscnlab/Templates/blob/main/logo/logo_with_text-01.png" width="400"/>
+
 ## Preface
 
 This repository provides the data and the analysis documentation to the publication "[*Physiologically-relevant light exposure and light behaviour in Switzerland and Malaysia*](https://doi.org/10.1101/2025.01.07.631760)"(PREPRINT Link), as per the [OSF Preregistration from 18 October 2024, version v1.0.1](https://osf.io/pd79m).
@@ -27,6 +29,7 @@ Figures and tables, created as part of the analysis, and published with the manu
 ## Reproduce results
 
 The best way to reproduce the results is to clone this repository to a local directory. Scripts depend on data and folders in the same directory structure as provided in this repository.
+
 Results can be reproduced by executing the R script `RUN_ME.R`. Executing the script will perform the following actions:
 
 - loading the custom function `check_renv_status`
@@ -34,3 +37,7 @@ Results can be reproduced by executing the R script `RUN_ME.R`. Executing the sc
 - restoring the project package library as contained int the `renv.lock` file
 - checking whether the project package library is successfully installed (will throw an error otherwise)
 - rendering the file `RPG_ASEAN_Analysis.qmd`. A successful run will produce an HMTL file of the same name, containing the analysis documentation, and all figures and tables in the subfolder `figures`
+
+*Note 1: The script requires a **chrome** or **chromium browser** to be installed on the system. Please ensure that such a browser is installed prior to execution. After a fresh install of the browser, restarting the system is suggested. The browser is used in a headless mode by the {webshot2} package through the {chromote} package, whenever `gt_save()` is called to save a table. Without chrome the script will stop with an error.*
+
+*Note 2: The package versions in the `renv.lock` file were tested against a fresh install of R and RStudio on a M4 MacBook Pro running MacOS Sequoia, a virtual machine running Windows 11 ARM, and Posit Cloud running Ubuntu 20.04 (Focal). Test runs were made on `30 January 2025`. If packages fail to install upon reproduction. * 
