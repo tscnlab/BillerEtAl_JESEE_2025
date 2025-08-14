@@ -1,9 +1,10 @@
 ---
-title: "Analysis RPG ASEAN"
+title: "Supplement: analysis documentation"
+subtitle: "Physiologically-relevant light exposure and light behaviour in Switzerland and Malaysia"
 author: "Anna Biller, Johannes Zauner, Christian Cajochen, Marisa A Gerle, Vineetha Kalavally, Anas Mohamed, Lukas Rottländer, Ming-Yi Seah, Oliver Stefani, Manuel Spitschan"
+doi: 10.5281/zenodo.16872096
 format: 
   html:
-    embed-resources: true
     code-tools: true
     toc: true
     toc-depth: 4
@@ -98,6 +99,8 @@ library(ggcorrplot)
 library(LightLogR)
 library(rlang)
 library(suntools)
+library(legendry)
+library(here)
 library(lme4)
 library(lmerTest)
 library(broom.mixed)
@@ -110,17 +113,19 @@ library(ordinal)
 library(ggtext)
 library(magick)
 library(ggh4x)
+library(circular)
 library(webshot2)
 library(rnaturalearthdata)
+library(gratia)
 
 #source functions
-source("functions/missing_data_table.R")
-source("functions/data_sufficient.R")
-source("functions/photoperiod.R")
-source("functions/table_lmer.R")
-source("functions/Inf_plots.R")
-source("functions/inference.R")
-source("functions/inference_table.R")
+source(here("functions/missing_data_table.R"))
+source(here("functions/data_sufficient.R"))
+source(here("functions/photoperiod.R"))
+source(here("functions/table_lmer.R"))
+source(here("functions/Inf_plots.R"))
+source(here("functions/inference.R"))
+source(here("functions/inference_table.R"))
 
 #setting a seed for the date of generation to ensure reproducibility of random processes
 seed <- 20241105
@@ -569,7 +574,7 @@ subset_metrics <-
   group_by(metric, Id) %>% 
   summarize(
     mean = mean(value, na.rm = TRUE),
-    sd = sd(value, na.rm = TRUE),
+    sd = stats::sd(value, na.rm = TRUE),
     se = sd/sqrt(n()-1),
     qlower = quantile(value, 0.4, na.rm = TRUE),
     qupper = quantile(value, 0.6, na.rm = TRUE),
@@ -1000,7 +1005,7 @@ metrics <-
 
 ##### Model fitting
 
-All models for Hypothesis showed very poor model diagnostics under a `gaussian` error distribution. According to the parameter metrics, the `poisson` family is a much more appropriate error distribution.
+All models for Hypothesis 1 showed very poor model diagnostics under a `gaussian` error distribution. According to the parameter metrics, the `poisson` family is a much more appropriate error distribution.
 
 ```{r H1}
 
@@ -1877,7 +1882,7 @@ leba_metrics_H4 <-
                expand_grid(bootstrap = seq(bootstraps)) %>%
                group_by(Id, bootstrap) %>%
                slice_sample(prop = 1, replace = TRUE) %>%
-               summarize(sd = sd(value), .groups = "drop_last") %>%
+               summarize(sd = stats::sd(value), .groups = "drop_last") %>%
                summarize(
                  mean_sd = mean(sd),
                  CI95lower = quantile(sd, 0.025),
@@ -1975,7 +1980,7 @@ leba_metrics %>%
   mutate(data = list(data %>% filter(site == "malaysia")),
          data = list(data %>% mutate(value = as.numeric(value)) %>% 
                        group_by(Id) %>% 
-                       summarize(sd = sd(value), mean = mean(value),
+                       summarize(sd = stats::sd(value), mean = mean(value),
                                  cv = sd/mean, .groups = "drop_last") %>% 
                        summarize(mean_sd = mean(sd),
                                  mean_cv = mean(cv))))
@@ -2918,7 +2923,7 @@ metric_descriptive %>%
   summarize(across(everything(), 
                    list(
                     mean = \(x) mean(x, na.rm = TRUE),
-                    sd = \(x) sd(x, na.rm = TRUE),
+                    sd = \(x) stats::sd(x, na.rm = TRUE),
                     n = \(x) x[!is.na(x)] %>% length())
                    )
   ) %>% 
@@ -3274,7 +3279,7 @@ data_1day <-
   aggregate_Date(
     unit = "15 mins",
     mean_MEDI = mean(log10(MEDI), na.rm = TRUE),
-    sd_MEDI = sd(log10(MEDI), na.rm = TRUE),
+    sd_MEDI = stats::sd(log10(MEDI), na.rm = TRUE),
     cv_MEDI = sd_MEDI/mean_MEDI,
     numeric.handler = \(x) median(x, na.rm = TRUE),
     lower95 = quantile(MEDI, 0.025, na.rm = TRUE),
@@ -3353,7 +3358,7 @@ singular_plot <-
   labs(fill = "Percentiles", 
        title = "Double plots of average days per participant ID and site",
        subtitle = 
-         "Median and percentiles of light exposure per 15 minutes (<span style='color:#ee0000;'>95%</span>, <span style='color:#ee0000CC;'>75%</span>, and <span style='color:#ee0000AA;'>50%</span> of data shown in ribbons). Grey backgrounds indicate (civil) nighttime. "
+         "Median and percentiles of light exposure per 15 minutes (<span style='color:#ee0000AA;'>95%</span>, <span style='color:#ee0000CC;'>75%</span>, and <span style='color:#ee0000;'>50%</span> of data shown in ribbons). Grey backgrounds indicate (civil) nighttime. "
        )+
   theme(plot.subtitle = element_textbox_simple(padding = margin(b=10)))
 
@@ -3554,6 +3559,882 @@ bootstrap_0 %>%
 ggsave("figures/Figure_S1.pdf", 
        width = 10, height = 7, units = "cm", scale = 2)
 
+```
+
+## Revision 1
+
+The following analysis were added during a revision of the manuscript following reviewer feedback
+
+```{r rev1 prep}
+#import data on sex and age
+demographic_data <- read_excel("data/LEBA_Participants_Age_Sex.xlsx")
+demographic_data$site <- c(rep(c("switzerland"), 20), rep("malaysia", 19))
+demographic_data <- demographic_data |> mutate(age_c = scale(age, scale = FALSE),
+                                               age_m = mean(age))
+demographic_data <- demographic_data |> 
+  mutate(age_cs = scale(age, scale = FALSE),
+         age_ms = mean(age), .by = site)
+
+#collect the light exposure data
+le_data <- metrics %>% filter(metric == "MEDI") %>% pull(data) %>% .[[1]]
+#add sex and age data
+le_data <-
+  le_data |> 
+  left_join(demographic_data, by = join_by(site, Id)) |> 
+  mutate(Id = factor(Id), site = factor(site))
+```
+
+
+### Sex differences in light exposure
+
+We explore sex differences in the light exposure pattern of the sites
+
+```{r sex differences}
+
+le_data$site_sex <- interaction(le_data$site, le_data$sex, drop = TRUE)   # 4-level factor
+le_data$sex <- factor(le_data$sex)
+
+form1 <- log10(MEDI) ~ 
+          site * sex +                        # parametric means
+          s(Time, by = site_sex, bs = "cc", k = 12) +      # four separate curves
+          s(Id, bs = "re")             # id-level random intercepts
+
+form0 <- log10(MEDI) ~ 
+          site +                        # parametric means
+          s(Time, by = site, bs = "cc", k = 12) +      # four separate curves
+          s(Id, bs = "re")             # id-level random intercepts
+
+#setting the ends for the cyclic smooth
+knots_day <- list(Time = c(0, 24))
+
+#Model generation
+sex_model <- 
+  bam(formula = form1, 
+      data = le_data, 
+      knots = knots_day,
+      samfrac = 0.1,
+      discrete = FALSE,
+      nthreads = 4,
+      control = list(nthreads = 4)
+      )
+
+sex_model0 <- 
+  bam(formula = form0, 
+      data = le_data, 
+      knots = knots_day,
+      samfrac = 0.1,
+      discrete = FALSE,
+      nthreads = 4,
+      control = list(nthreads = 4)
+      )
+
+#Model performance
+AICs <- 
+AIC(sex_model0, sex_model)
+AICs
+
+sex_model_sum <- 
+summary(sex_model)
+sex_model_sum
+
+gam.check(sex_model)
+
+# plot(Pattern_model)
+
+draw(sex_model)
+
+sex_plot_o <-
+plot_smooth(
+  sex_model,
+  view = "Time",
+  plot_all = c("site_sex", "sex", "site"),
+  rug = F,
+  n.grid = 90,
+  col = c(pal_jco()(2), pal_jco()(2) |> alpha(0.5)),
+  rm.ranef = "s(Id)",
+  sim.ci = TRUE
+  )
+
+sex_plot_d1 <-
+plot_diff(sex_model,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "switzerland"),
+          comp = list(sex = c("F", "M"), site_sex = c("switzerland.F", "switzerland.M")),
+          sim.ci = TRUE)
+
+sex_plot_d2 <-
+plot_diff(sex_model,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "malaysia"),
+          comp = list(sex = c("F", "M"), site_sex = c("malaysia.F", "malaysia.M")),
+          sim.ci = TRUE)
+
+Psex1 <-
+sex_plot_o$fv %>% 
+  filter(str_detect(site_sex, c(as.character(site)))) |> 
+  filter(str_detect(site_sex, c(as.character(sex)))) |> 
+  mutate(site = str_to_title(site),) %>%
+  ggplot(aes(x = Time*60*60, y = fit, col = site_sex, lty = sex)) +
+  geom_ribbon(aes(ymin = ll, ymax = ul, fill = site_sex), alpha = 0.25, col = NA)+
+  geom_line() +
+  theme_minimal() +
+  scale_color_manual(values = c("#0073C2FF", "#EFC000FF", "#0073C2FF", "#EFC000FF")) +
+  scale_fill_manual(values = c("#0073C280", "#EFC00080", "#0073C240", "#EFC00040")) +
+  scale_linetype_manual(values = c(1, 2)) +
+  # scale_color_jco()+
+  # scale_fill_jco()+
+  labs(y = "Model fit with 95% CI, log10(mel EDI, lx)", x = "Local Time (HH:MM)", 
+      linetype = "Sex") +
+  guides(fill = "none", color = "none") +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels
+               ) +
+  facet_wrap(~site) +
+    theme(panel.spacing = unit(1.75, "lines"))
+
+Psex2 <-
+sex_plot_d1 %>% 
+  mutate(significant = (est-sim.CI < 0) & (0 < est + sim.CI),
+         site = "Switzerland (F - M)") %>% 
+  ggplot(aes(x = Time*60*60, y = est, group = consecutive_id(significant) )) +
+  geom_ribbon(aes(ymin = est-sim.CI, ymax = est+sim.CI, fill = !significant), 
+              alpha = 0.25, col = NA)+
+  geom_line(aes(col = !significant)) +
+  geom_hline(aes(yintercept = 0)) +
+  theme_minimal() +
+  facet_wrap(~site) +
+  labs(y = "Fitted difference smooth with 95% CI", x = NULL,
+       col = label_sig, fill = label_sig) +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels)
+
+Psex3 <-
+sex_plot_d2 %>% 
+  mutate(significant = (est-sim.CI < 0) & (0 < est + sim.CI),
+         site = "Malaysia (F - M)") %>% 
+  ggplot(aes(x = Time*60*60, y = est, group = consecutive_id(significant) )) +
+  geom_ribbon(aes(ymin = est-sim.CI, ymax = est+sim.CI, fill = !significant), 
+              alpha = 0.25, col = NA)+
+  geom_line(aes(col = !significant)) +
+  geom_hline(aes(yintercept = 0)) +
+  theme_minimal() +
+  labs(y = "Fitted difference smooth with 95% CI", x = NULL,
+       col = label_sig, fill = label_sig) +
+  facet_wrap(~site) +
+  scale_x_time(limits = c(0, 24*60*60), expand = c(0,0),
+               breaks = c(0, 6, 12, 18, 24)*60*60, labels = time_labels)
+
+(Psex1 + Psex3 + Psex2) +
+  plot_annotation(tag_levels = "A") +
+  plot_layout(guides = "collect",widths = c(2,1,1))
+
+ggsave("figures/Figure_S2.pdf", 
+       width = 17, height = 7, units = "cm", scale = 1.6)
+
+
+```
+
+There is strong evidence for a site specific effect of sex. While there is no difference in overall melanopic EDI, the patterns of exposure differ. Specifically, females in Malaysia are less exposed to light in the hours before noon and around midnight, compared to males. In Switzerland, females are exposed to more light before noon, compared to males, and are also more likely to have a higher exposure in the afternoon. The effect size is a reduction of about 60% for women in Malaysia in the specified times of day, and about a 5-fold increase for women in Switzerland before noon, and about 2- to 3-fold in the afternoon.
+
+```{r TAT1000 sex}
+TAT1000 <- metrics |> filter(metric == "TAT1000")
+TAT1000 <-
+TAT1000 |>
+  mutate(data = data |> map(
+    \(x) x |>
+      left_join(demographic_data, by = join_by(site, Id)) |>
+      mutate(Id = factor(Id), site = factor(site)))
+  )
+
+formula_Hsex <- value ~ site*sex + (1|site:Id)
+formula_H0sex <- value ~ site + (1|site:Id)
+
+map <- purrr::map
+
+inference_Hsex <- 
+  TAT1000 %>% 
+  # mutate(data = 
+  #          data %>% 
+  #          purrr::map(\(x) x %>% mutate(value_dc = 
+  #                                  (value/photoperiod_duration) %>% round()))
+  #        )
+  inference_summary(formula_Hsex, formula_H0sex, p_adjustment = 1,
+                    family = poisson())
+m_sex1 <- glmer(formula_Hsex, data = TAT1000$data[[1]], family = poisson())
+m_sex0 <- glmer(formula_H0sex, data = TAT1000$data[[1]], family = poisson())
+
+summary(m_sex1)
+summary(m_sex0)
+anova(m_sex1, m_sex0)
+
+```
+
+There is no significant difference between the time spent above 1000 lx between men or women in either of the sites.
+
+### Age differences in light exposure
+
+We explore age differences in the sites, starting with some basic comparisons.
+
+```{r age prep}
+sex_lab <- primitive_bracket(
+  key  = key_range_manual(          # <− positions + labels
+    start = c(-7,0.1),
+    
+    end = c(-0.1,7),# -6  and  +6  on the x-axis
+    name     = c("Males", "Females")
+  ),
+  position = "bottom"         # draw it at the bottom of the panel
+)
+                           
+demographic_data |> 
+  mutate(
+         age_group = 
+           cut(age, 
+               breaks = seq(15,55,5), 
+               labels = c("18-20", "21-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51-55"),
+               right = FALSE),
+         site = str_to_title(site)
+         )|>
+  group_by(site, sex, age_group) |> 
+  summarize(n = n(), .groups = "drop") |> 
+  mutate(n = ifelse(sex == "M", -n, n)) |> 
+  ggplot(aes(x= age_group, y = n, alpha = sex, fill = site)) + 
+  geom_col() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~site) +
+  scale_y_continuous(breaks = seq(-6,6, by = 2), 
+                     labels = c(6, 4, 2, 0, 2, 4, 6)) +
+  scale_fill_manual(values = pal_jco()(2)) +
+  scale_alpha_manual(values = c(1, 1))+
+  guides(fill = "none", alpha = "none",
+         x = guide_axis_stack(
+           "axis", sex_lab
+         )) +
+  theme_minimal() +
+  coord_flip(ylim = c(-7, 7)) +
+  labs(x = "Age (yrs)", y = "n", fill = "Site")
+
+ggsave("figures/Figure_S3.pdf", 
+       width = 10, height = 6, units = "cm", scale = 1.6)
+
+model_age <- lm(age ~ site*sex, data = demographic_data)
+model_age2 <- lm(age ~ site +sex, data = demographic_data)
+model_age3 <- lm(age ~ site, data = demographic_data)
+model_age |> summary()
+model_age2 |> summary()
+model_age3 |> summary()
+
+anova(model_age, model_age2, model_age3)
+plot(model_age)
+plot(model_age2)
+```
+
+There is some evidence that age is different in the two sites, with participants about 6 years older in Switzerland compared to Malaysia. There is no significant difference in sex, nor is there a difference in sex between the sites (interaction of `sex*site`). Because of the significant age difference, age is a confounder for a comparison between the sites, with sparse coverage of the age range. Thus we will not explore how age affects light exposure in general, but rather whether age-differences from the site-mean affect light exposure. These results will have to be taken very tentative, as data is sparse.
+
+```{r age}
+
+form_age <- log10(MEDI) ~ site +                      # site main effect
+            s(age_cs, by = site, k = 6) +                         # overall age trend
+            te(Time, age_cs, by = site,                # age × time within site
+               bs = c("cc", "tp"), k = c(12, 5)) +
+            s(Id, bs = "re")                          # random intercepts
+knots_day <- list(Time = c(0, 24))
+
+m_age <- bam(
+  form_age,
+  data = le_data,
+  knots = knots_day,
+  select = TRUE,
+  samfrac = 0.1,
+  discrete = FALSE,
+  nthreads = 4,
+  control = list(nthreads = 4)
+)
+
+#Model performance
+AICs <- 
+AIC(m_age, sex_model0)
+AICs
+
+appraise(m_age)
+
+age_model_sum <- 
+summary(m_age)
+age_model_sum
+
+draw(m_age, select = 1:2, residuals = FALSE) & theme_minimal()
+
+draw(m_age,
+     select = 3:4,
+     residuals = FALSE,
+     rug = FALSE
+     ) & theme_minimal()
+
+
+plot_diff(m_age,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "malaysia"),
+          comp = list(age_cs = c(-5, 0)),
+          sim.ci = TRUE)
+plot_diff(m_age,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "switzerland"),
+          comp = list(age_cs = c(-5, 0)),
+          sim.ci = TRUE)
+plot_diff(m_age,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          # cond = list(site = "switzerland"),
+          comp = list(age_cs = c(-6, 0), site = c("switzerland", "malaysia")),
+          sim.ci = TRUE)
+plot_diff(m_age,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "malaysia"),
+          comp = list(age_cs = c(0, 20)),
+          sim.ci = TRUE)
+
+plot_diff(m_age,
+          view = "Time", 
+          rm.ranef = "s(Id)",
+          cond = list(site = "switzerland"),
+          comp = list(age_cs = c(0, 20)),
+          sim.ci = TRUE)
+
+```
+Results will be divided depending on where is comparatively good coverage of data, and sparse. All of these results should be interpreted tentatively. Good coverage:
+
+- There is some evidence that younger participants (average - 5 years) in Malaysia have brighter mornings and darker nights, whereas younger participants in Switzerland have brighter times before and after noon, as well as darker evenings.
+
+- Even when corrected for the age difference, the overall difference pattern between the sites remain: Participants in switzerland exhibit brighter days, particularly in the morning, and darker nights.
+
+Sparse coverage: 
+
+- Older participants in both Malaysia and Switzerland seem to have brighter early mornings. Whereas participants in Malaysia exhibit darker nights, older swiss participants have brighter afternoons and evenings, each compared to their average age group. 
+
+### Photoperiod duration
+
+We explore the effect of photoperiod changes on light exposure patterns (in Switzerland)
+
+```{r photoperiod duration2}
+le_data_swiss <-
+  le_data |> 
+  filter(site == "switzerland") |> 
+  mutate(Datetime = with_tz(Datetime, tzs$switzerland)) |> 
+  add_photoperiod(coordinates$switzerland[2:1]) |> 
+  mutate(photoperiod = as.numeric(photoperiod) |> scale(scale = FALSE))
+
+le_data_swiss |> pull(photoperiod) |> range()
+
+le_data_swiss |> extract_photoperiod(coordinates$switzerland[2:1]) |> 
+  ggplot(aes(x = photoperiod)) + geom_histogram(binwidth = 30/60)
+
+form_pp <- log10(MEDI) ~ photoperiod +               
+            te(Time, photoperiod,           
+               bs = c("cc", "tp"), k = c(10, 5)) +
+            s(Id, bs = "re")                    
+form_pp2 <- log10(MEDI) ~               
+            te(Time, photoperiod,           
+               bs = c("cc", "tp"), k = c(10, 5)) +
+            s(Id, bs = "re")                    
+form_pp0 <- log10(MEDI) ~                 
+            te(Time,           
+               bs = c("cc"), k = c(10)) +
+            s(Id, bs = "re")                    
+knots_day <- list(Time = c(0, 24))
+
+m_pp <- bam(
+  form_pp,
+  data = le_data_swiss,
+  knots = knots_day,
+  select = TRUE,
+  samfrac = 0.1,
+  discrete = FALSE,
+  nthreads = 4,
+  control = list(nthreads = 4)
+)
+
+m_pp2 <- bam(
+  form_pp2,
+  data = le_data_swiss,
+  knots = knots_day,
+  select = TRUE,
+  samfrac = 0.1,
+  discrete = FALSE,
+  nthreads = 4,
+  control = list(nthreads = 4)
+)
+
+m_pp0 <- bam(
+  form_pp0,
+  data = le_data_swiss,
+  knots = knots_day,
+  select = TRUE,
+  samfrac = 0.1,
+  discrete = FALSE,
+  nthreads = 4,
+  control = list(nthreads = 4)
+)
+
+#Model performance
+AICs <- 
+AIC(m_pp, m_pp0, m_pp2)
+AICs
+
+appraise(m_pp)
+
+summary(m_pp2)
+
+draw(m_pp2, select = 1, rug = FALSE)
+sm <-
+  smooth_estimates(m_pp2, n = 24*4) |> add_confint() 
+
+pp_plot_model <- 
+sm |> 
+  filter(.smooth == "te(Time,photoperiod)") |>
+  ggplot() +
+  geom_tile(aes(x = Time, y = photoperiod, fill = (.estimate))) +
+  geom_vline(xintercept = c(4,8, 12, 16, 20), lty = 2)+
+  theme_cowplot() +
+  labs(y = "Diff. photoperiod from average (hours)", x = "Time (hours)", fill = "Estimate of\nlog10(melEDI)") +
+  scale_fill_viridis_c(
+  ) +
+  scale_x_continuous(breaks = seq(0, 24, by = 4))+
+  coord_cartesian(xlim = c(0,24), expand = FALSE)
+
+pp_plot_data <- 
+le_data_swiss |> 
+  add_photoperiod(coordinates$switzerland[2:1], overwrite = TRUE) |> 
+  mutate(photoperiod = as.numeric(photoperiod) %/% (5/60) * (5/60),
+         Time = Time %/% (5/60) * (5/60)
+         ) |> 
+  summarize(.by = c(photoperiod, Time), MEDI = median(MEDI)) |> 
+  ggplot(aes(x= Time, y = photoperiod, fill = MEDI-0.1)) +
+  geom_tile()+  
+  geom_vline(xintercept = c(4,8, 12, 16, 20), lty = 2)+
+  labs(y = "Photoperiod (hours)", x = "Time (hours)", fill = "mel EDI (lx)") +
+  theme_cowplot()+
+  scale_fill_viridis_b(trans = "symlog", breaks = c(0, 10^(0:3)), option = "E",
+                       labels = c("0", "1", "10", "100", "1000")) +
+  scale_x_continuous(breaks = seq(0, 24, by = 4))+
+  coord_cartesian(xlim = c(0,24), expand = FALSE)
+
+pp_plot_model + pp_plot_data + plot_layout(guides = "collect")
+
+ggsave("figures/Figure_S4.pdf", 
+       width = 17, height = 7, units = "cm", scale = 1.6)
+
+gam.check(m_pp2)
+```
+
+From the model results we can see that for the light exposure overall, photoperiod has no mere parametric influence, but rather influences the pattern. Both raw data and modelled representation show a gradual extension towards longer exposure into the evening, while there is moderate extension into the morning. In all (photoperiod) cases, there are two pronounced high-points during the day, one around noon, and the second in the afternoon around 4 pm. Due to the noise in the data, this is better reflected in the model representation.
+
+### Chronotype effect
+
+In this section, we look into the effect of chronotype on the timing of light exposure. Specifically the mean timing of light exposure above 250 lx melanopic EDI (MLiT250). We did not assess chronotype directly. However, questions in the PSQI refer to the timing of sleep, which can be used to calculate the mid-sleep.
+
+```{r calculate chronotype}
+#combined dataset
+psqi_switzerland <- 
+  psqi_switzerland |> 
+                  rename(Id = code,
+                         psqi_01_corrected = psqi_q1_bedtime,
+                         psqi_02_corrected = psqi_q2_sleeptime,
+                         psqi_03_corrected = psqi_q3_getuptime,
+                         )
+#calculate chronotype
+CT_combined <-
+  join_datasets(psqi_malaysia, 
+                psqi_switzerland, 
+                add.origin = TRUE, 
+                Datetime.column = Day
+                ) |> 
+  select(dataset, Id, Day, ends_with("_corrected")) |> 
+    filter(Day == 31 | Id %in% c("1990ZEZA", "1996VILE")) |> 
+    mutate(site = str_extract(dataset, "(?<=psqi_).*")) |> 
+    select( -psqi_04_corrected, -dataset) |> 
+    drop_na() |> 
+    mutate(Sonset = hms::as_hms(psqi_01_corrected + dminutes(psqi_02_corrected)),
+           Soffset = psqi_03_corrected,
+           MS = Soffset - Sonset,
+           MS = ifelse(MS <= 0, MS + ddays(1), MS),
+           MS = MS/2,
+           MS = (MS + ifelse((MS + Sonset) > 24*60*60, 
+                               Sonset - ddays(1), 
+                               Sonset)
+                  ) |> hms::as_hms(),
+           Chronotype = cut(MS |> as.numeric(), 
+                            breaks = c(0, 3*60*60, 4*60*60, 24*60*60), 
+                            labels = c("early", "intermediate", "late")
+                            )
+           )
+
+#correct for Id values in Switzerland
+CT_combined <-
+  CT_combined |> 
+    left_join(conv_switzerland, by = join_by(Id == Code)) |> 
+    mutate(Id = coalesce(ID, Id)) |> 
+    select(-ID)
+
+CT_combined |> 
+  mutate(site = str_to_title(site)) |> 
+  ggplot(aes(x = site, y = MS)) + 
+  geom_boxplot(aes(fill = site)) + 
+  geom_jitter(width = 0.1, alpha = 0.25) +
+  theme_cowplot() +
+  scale_fill_jco() +
+  guides(fill = "none") +
+  labs(y = "Chronotype (Mid-sleep, HH:MM)", x = "Site") +
+  scale_y_time(labels = \(x) strftime(x, format = "%H:%M"))
+
+ggsave("figures/Figure_S5.pdf", 
+       width = 7, height = 7, units = "cm", scale = 1.6)
+
+CT_model <- lm(as.numeric(MS) ~ site, data = CT_combined) 
+summary(CT_model)
+
+CT_combined |> 
+  summarize(mean = mean(MS) |> round() / 3600,
+          sd = sd(MS)|> round()  / 3600,
+          .by = site)
+
+
+extract_data <- 
+data$malaysia |> group_by(Id, Day) |> filter(Datetime == min(Datetime))
+  
+solar_noon(coordinates = coordinates$malaysia[2:1], dates = extract_data$Day, tz = tzs$malaysia) |> 
+  add_Time_col(Datetime.colname = solar.noon) |> 
+  summarize(mean_ml = (mean(Time)/3600 )|> as.numeric())
+
+extract_data <- 
+data$switzerland |> group_by(Id, Day) |> filter(Datetime == min(Datetime))
+  
+solar_noon(coordinates = coordinates$switzerland[2:1], dates = extract_data$Day, tz = tzs$switzerland) |> 
+  add_Time_col(Datetime.colname = solar.noon) |> 
+  summarize(mean_ml = (mean(Time)/3600 )|> as.numeric())
+
+```
+
+Two participants in Switzerland (`1990ZEZA` and `1996VILE`) only have a PSQI filled in for the first day, but not the last of the trial. For those two, the first day is used.
+Chronotypes differ significantly between the two sites, with earlier chronotypes in Switzerland (mid-sleep ~5:00a.m. in Malaysia, and about 1:12 hours earlier in Switzerland, i.e., ~3:48a.m.).
+
+```{r calculate MLiT250}
+MLiT250 <-
+le_data |> 
+  group_by(site, Id, Day) |> 
+  mutate(Time = (Time * 3600) |> hms::as_hms()) |> 
+  summarize(
+    timing_above_threshold(MEDI, 
+                           Time, 
+                           "above", 
+                           250, 
+                           na.rm = TRUE, 
+                           as.df = TRUE),
+    .groups = "drop_last"
+    ) |> 
+  left_join(CT_combined, by = c("site", "Id")) |> 
+  select(site, Id, mean_timing_above_250, MS, Chronotype, Day.x) |> 
+  mutate(MLiT250 = hms::as_hms(mean_timing_above_250))
+```
+
+```{r correlate MLiT250 against CT}
+MLiT250_rad <- 
+MLiT250 |> 
+  mutate(across(c(MS, MLiT250), \(x) as.numeric(x) %% 86400),
+         across(c(MS, MLiT250), \(x) circular(
+           x / 86400 * 2 * pi, type = "angles", units = "radians", 
+           template = "clock24"
+         ))
+         ) 
+
+cor.values <- 
+MLiT250_rad |>
+  group_by(site) |> 
+  reframe(cor = as.tibble(cor.circular(MLiT250, MS, test = TRUE))) |> 
+  unnest(cor) |> 
+  mutate(site = site |> str_to_title(),
+         p.value = p.value |> gtsummary::label_style_pvalue(2)(),
+         r = cor |> round(2)) |> 
+  select(-cor, -statistic)
+
+cor.values |> gt() |> tab_header("(Circular) correlation of MLiT250 and chronotype")
+
+model_CT0 <- lmer(MLiT250 ~ site + (1|Id), data = MLiT250_rad)
+model_CT1 <- lmer(MLiT250 ~ MS + site + (1|Id), data = MLiT250_rad)
+model_CT2 <- lmer(MLiT250 ~ MS*site + (1|Id), data = MLiT250_rad)
+anova(model_CT0, model_CT1, model_CT2)
+model_CT1 |> summary()
+
+
+```
+
+```{r plot MLiT250 against CT}
+CT_P1 <-
+MLiT250 |> 
+  mutate(site = site |> str_to_title()) |> 
+  ggplot(aes(x=MS, y = MLiT250)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(aes(col = site, fill = site), method = "lm") +
+  facet_wrap(~site) +
+  geom_text(data = cor.values, 
+             aes(label = paste0("r: ", r, ", p: ", p.value), 
+                 x = 8*60*60, 
+                 y = 22*60*60,
+                 hjust = 1)
+             ) + 
+  theme_cowplot() +
+  scale_fill_jco() +
+  scale_color_jco() +
+  scale_y_time(labels = \(x) strftime(x, format = "%H:%M")) +
+  scale_x_time(labels = \(x) strftime(x, format = "%H:%M")) +
+  guides(col = "none", fill = "none") +
+  labs(x = "Chronotype (mid-sleep, HH:MM)",
+       y = "Mean timing of light (MLiT) \nabove 250lx mel EDI (HH:MM)")
+
+CT_P2 <- 
+MLiT250 |> 
+  mutate(site = site |> str_to_title()) |> 
+  ggplot(aes(x=Chronotype, y = MLiT250)) +
+  geom_violin(aes(
+                  alpha = Chronotype), fill = "grey", col = "grey", linewidth = 0.1) +
+  scale_fill_jco()+
+  guides(fill = "none", alpha = "none") +
+  geom_boxplot(width = 0.25, aes(fill = site), linewidth = 0.35) +
+  # geom_jitter(width = 0.05, alpha = 0.1) +
+  scale_y_time(labels = \(x) strftime(x, format = "%H:%M")) +
+  facet_wrap(~site) + 
+  labs(x = "Chronotype (based on mid-sleep)",
+       y = "Mean timing of light (MLiT) \nabove 250lx mel EDI (HH:MM)",
+       caption = "Intermediate: 3 a.m. ≤ mid-sleep ≤ 4 a.m") +
+  theme_cowplot() 
+
+# CT_P1 / CT_P2 + plot_layout(axes = "collect")
+
+CT_P1
+
+ggsave("figures/Figure_S6.pdf", 
+       width = 9, height = 6, units = "cm", scale = 1.6)
+
+ MLiT250 <-
+  MLiT250 |> mutate(across(where(hms::is.hms), \(x) as.numeric(x)/3600))
+
+CT_model <- lmerTest::lmer(MLiT250 ~ MS*site + (1|Id), data = MLiT250)
+
+CT_model |> summary()
+
+```
+
+Chronotype is significantly correlated with the mean timing of light exposure above 250 lx melanopic EDI (MLiT250) in Malaysia, but not Switzerland. The significant effect size is small (r = 0.22, p < 0.001). Per hour of increase in mid-sleep timing, MLiT250 increases about 16.4 minutes.
+
+### Brown recommendations
+
+In this section, we look into the compliance to the Brown recommendations for healthy lighting. We use the sleep-wake-data derived from the PSQI as a proxy for day-specific sleep times, and calculate the compliance per site, and also per site and time of day.
+
+```{r generate sleep-intervals}
+sleep_combined <-
+  CT_combined |>
+  mutate(Sonset = ifelse(Sonset >= 24*60*60, Sonset - 24*60*60, Sonset) |> 
+           hms::as_hms()) |> 
+  select(site, Id, Sonset, Soffset) |>
+  rename(sleep = Sonset, wake = Soffset) |>
+  pivot_longer(names_to = "State",
+               cols = c(sleep, wake),
+               values_to = "Time") |>
+  mutate(Id = fct_relabel(Id, \(x) str_remove(x, "ID|MY0")),
+         Id = factor(Id, levels = sprintf("%02d", 1:20)),
+         site = str_to_title(site)) |> 
+  arrange(site, Id)
+
+
+sleep_data <-
+data_combined |> 
+  select(site, Id, Day) |> 
+  distinct() |> 
+  left_join(sleep_combined, by = c("site", "Id"), relationship = "many-to-many")
+
+sleep_data <- 
+sleep_data |> 
+  group_by(site) |> 
+  mutate(Datetime = lubridate::as_datetime(paste(Day, Time))) |> 
+  select(site, Id, Datetime, State) |> 
+  arrange(site, Id, Datetime)
+
+sleep_intervals <-
+  sleep_data |> 
+  group_by(site, Id) |> 
+  sc2interval()
+
+```
+
+```{r convert to brown times}
+Brown_intervals <- 
+sleep_intervals |> 
+  group_by(site, Id) |> 
+  sleep_int2Brown() |> 
+  drop_na() |> 
+  mutate(Id = interaction(site, Id)) |> 
+  mutate(start = int_start(Interval), end = int_end(Interval)) |> 
+  ungroup(site) |>
+  select(-site, -Interval) 
+```
+
+```{r add to data set}
+brown_data <-
+data_combined |> select(site, Id, Datetime, MEDI, dusk, dawn) |> 
+  mutate(Id = interaction(site, Id)) |> 
+  group_by(Id) |> 
+  add_states(Brown_intervals) |> 
+  # interval2state(Brown_intervals, State.colname = State.Brown, overwrite = TRUE) |> 
+  add_Time_col()
+```
+
+```{r calculate compliance}
+state_compliance <- 
+brown_data |> 
+  Brown2reference() |> 
+  drop_na(State.Brown) |> 
+  group_by(site, State.Brown, .add = TRUE) |>
+  durations(Reference.check, show.missing = TRUE, FALSE.as.NA = TRUE) |> 
+  mutate(
+    compliance = (duration/total),
+    site = str_to_title(site)
+  ) |> 
+  ungroup(Id) |> 
+  drop_na() |> 
+  summarize(across(-Id, mean), .groups = "drop") |> 
+  mutate(across(c(duration, missing, total), as.duration),
+         compliance = compliance |> scales::percent(2)) |> 
+  rename(compliant = duration,
+         `non-compliant` = missing,
+         ) |> 
+  group_by(State.Brown)
+
+overall_compliance <-
+  state_compliance |> 
+    group_by(site) |> 
+    summarize(across(c(compliant, `non-compliant`, total), 
+                     \(x) sum(x) |> as.duration())) |> 
+    mutate(compliance = (compliant/total) |> scales::percent(),
+           State.Brown = "overall")
+
+compliance_table <- 
+rbind(state_compliance, overall_compliance) |> 
+  mutate(State.Brown = str_to_title(State.Brown)) |> 
+  select(site, State.Brown, compliance) |> 
+  pivot_wider(names_from = State.Brown, values_from = compliance) |> 
+  gt(rowname_col = "site") |> 
+  tab_header("Compliance to Brown recommendation for healthy light exposure") |> 
+  tab_footnote(md("*Day* includes the time from wake until evening (recommendation ≥ 250lx mel EDI).<br>*Evening* starts three hours prior to sleep until sleep onset (recommendation ≤ 10lx mel EDI).<br>*Night* covers the sleep times (recommendation ≤ 1lx mel EDI).<br>*Overall* indicates the time-weighted average compliance."))
+
+compliance_table
+
+# compliance_table |>
+# gtsave("figures/Table_H7.png")
+
+```
+
+```{r visualize compliance}
+compliance_Plot1 <-
+brown_data |> 
+  Brown2reference() |> 
+  mutate(
+         Reference.check = ifelse(Reference.check, "compliant", "non-compliant")
+         ) |> 
+  drop_na(Reference.check) |> 
+  ggplot(aes(x= Time, after_stat(count), fill = (Reference.check) |> fct_rev())) +
+  # geom_density(position = "fill", linewidth = 0.25, bw = 1/12) +
+  geom_density(position = "fill", linewidth = 0.25, bw = 1/12) +
+  facet_wrap(~site) +
+  theme_cowplot() +
+  # scale_fill_viridis_d(option = "A") +
+  # guides(fill = "none") +
+  labs(
+       x = "Local time (HH:MM)",
+       y = "Cumulative percentage (%)",
+       fill = "Compliance to recommendations") +
+  scale_y_continuous(labels = scales::label_percent()) +
+  scale_x_time(
+    breaks = seq(0, 24*60*60, by = 6*60*60),
+    labels = \(x) strftime(x, format = "%H:%M")
+    # labels = NULL
+  ) +
+  # scale_x_continuous(
+  #   breaks = seq(0, 24, by = 6),
+  #   labels = \(x) sprintf("%2d:00", x)
+  #   ) +
+    facet_wrap2( ~ site,
+                 # switch = "y",
+             labeller = labeller(site = NA),
+             strip = 
+               strip_themed(background_x = element_blank(), 
+                            text_x = element_blank())) +
+    theme(panel.spacing = unit(1.5, "lines"))
+
+compliance_Plot2 <- 
+brown_data |> 
+  Brown_cut(vector_labels = c("<1lx", "1 - 10lx", "10 - 250lx", "> 250lx")) |> 
+  drop_na(state) |> 
+  ggplot(aes(x= Time, after_stat(count), fill = fct_rev(state))) +
+  geom_density(position = "fill", col = NA, bw = 1/12) +
+  # facet_wrap(~site) +
+  scale_fill_manual(values = c("yellow", "darkgrey", "lightgrey", "black")) +
+  cowplot::theme_cowplot() +
+  # guides(fill = "none") +
+  labs(
+       x = "Local time (HH:MM)",
+       y = "Cumulative percentage (%)",
+       fill = "mel EDI (lx)") +
+  scale_y_continuous(labels = scales::label_percent()) +
+  scale_x_continuous(
+    breaks = seq(0, 24*60*60, by = 6*60*60),
+    labels = NULL
+  #   labels = \(x) sprintf("%2d:00", x)
+    ) +
+    facet_wrap2( ~ site,
+                 # switch = "y",
+             # labeller = labeller(site = facet_names),
+             strip = 
+               strip_themed(background_x = elem_list_rect(fill = pal_jco()(2)))) +
+  theme(panel.spacing = unit(1.5, "lines"))
+
+# compliance_Plot3 <-
+# brown_data |> 
+#   drop_na(State.Brown) |> 
+#   ggplot(aes(x= Time, after_stat(count), fill = fct_rev(State.Brown))) +
+#   geom_density(position = "fill", col = NA, bw = 1/12) +
+#   # facet_wrap(~site) +
+#   scale_fill_manual(values = c(night = "darkblue", evening = "lightyellow4", day = "skyblue2")) +
+#   cowplot::theme_cowplot() +
+#   # guides(fill = "none") +
+#   labs(
+#        x = "Local time (HH:MM)",
+#        y = "Cumulative percentage (%)",
+#        fill = "Brown states") +
+#   scale_y_continuous(labels = scales::label_percent()) +
+#   scale_x_time(
+#     breaks = seq(0, 24*60*60, by = 6*60*60),
+#     labels = NULL
+#     # labels = \(x) strftime(x, format = "%H:%M")
+#     ) +
+#     facet_wrap2( ~ site,
+#                  # switch = "y",
+#              # labeller = labeller(site = facet_names),
+#              strip = 
+#                strip_themed(background_x = element_blank(), 
+#                             text_x = element_blank())) +
+#   theme(panel.spacing = unit(1.5, "lines"))
+
+compliance_Plot2 /
+  # compliance_Plot3 /
+  compliance_Plot1 + 
+  plot_layout(axes = "collect") & theme(legend.position = "bottom")
+
+ggsave("figures/Figure_S7.pdf", 
+       width = 14, height = 12, units = "cm", scale = 1.6)
 ```
 
 ## Session Info
