@@ -1,8 +1,58 @@
 ---
 title: "Supplement: analysis documentation"
 subtitle: "Physiologically-relevant light exposure and light behaviour in Switzerland and Malaysia"
-author: "Anna Biller, Johannes Zauner, Christian Cajochen, Marisa A Gerle, Vineetha Kalavally, Anas Mohamed, Lukas Rottländer, Ming-Yi Seah, Oliver Stefani, Manuel Spitschan"
+author: 
+  - name: "Anna Biller"
+    affiliation:
+      - Technical University of Munich, Germany
+      - Max Planck Institute for Biological Cybernetics, Germany
+    orcid: "0000-0002-3673-8838"
+    corresponding: true
+    email: anna.biller@tum.de
+  - name: "Johannes Zauner"
+    id: JZ
+    affiliation: 
+      - Technical University of Munich, Germany
+      - Max Planck Institute for Biological Cybernetics, Germany
+    orcid: "0000-0003-2171-4566"
+    email: johannes.zauner@tum.de
+  - name: "Christian Cajochen"
+    affiliation:
+      - Centre for Chronobiology, University Psychiatric Clinics Basel (UPK), Basel, Switzerland
+    orcid: "0000-0003-2699-7171"
+  - name: "Marisa A Gerle"
+    affiliation:
+      - Centre for Chronobiology, University Psychiatric Clinics Basel (UPK), Basel, Switzerland
+    orcid: "0009-0000-9159-1093"
+  - name: "Vineetha Kalavally"
+    affiliation:
+      - Monash University Malaysia, Electrical and Computer Systems Engineering, Intelligent Lighting Laboratory, Malaysia
+    orcid: "0000-0002-3531-9076"
+  - name: "Anas Mohamed"
+    affiliation:
+      - Monash University Malaysia, Electrical and Computer Systems Engineering, Intelligent Lighting Laboratory, Malaysia
+    orcid: "0000-0001-5418-4501"
+  - name: "Lukas Rottländer"
+    affiliation:
+      - Centre for Chronobiology, University Psychiatric Clinics Basel (UPK), Basel, Switzerland
+    orcid: "0009-0007-9062-0113"
+  - name: "Ming-Yi Seah"
+    affiliation:
+      - Monash University Malaysia, Electrical and Computer Systems Engineering, Intelligent Lighting Laboratory, Malaysia
+    orcid: "0009-0005-5409-5839"
+  - name: "Oliver Stefani"
+    affiliation:
+      - Lucerne School of Engineering and Architecture, Lucerne University of Applied Sciences and Arts, Horw, Switzerland
+    orcid: "0000-0003-3854-3222"
+  - name: "Manuel Spitschan"
+    id: MS
+    affiliation: 
+      - Technical University of Munich, Germany
+      - Max Planck Institute for Biological Cybernetics, Germany
+      - Technical University of Munich, Institute for Advanced Study (TUM-IAS), Germany
+    orcid: "0000-0002-8572-9268"
 doi: 10.5281/zenodo.16872096
+authornote: "Anna Biller and Johannes Zauner are shared first authors."
 format: 
   html:
     code-tools: true
