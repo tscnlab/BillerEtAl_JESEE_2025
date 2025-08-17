@@ -2,7 +2,7 @@
 title: "Supplement: analysis documentation"
 subtitle: "Physiologically-relevant light exposure and light behaviour in Switzerland and Malaysia"
 author: 
-  - name: "Anna Biller"
+  - name: "Anna M Biller"
     affiliation:
       - Technical University of Munich, Germany
       - Max Planck Institute for Biological Cybernetics, Germany
