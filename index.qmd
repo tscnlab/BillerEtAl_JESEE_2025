@@ -2568,7 +2568,7 @@ corr_results %>% filter(significant_adjusted) %>%
   cols_add(Interpretation = interpretation) %>% 
   fmt(columns = leba, fns = \(x) x %>% str_remove("leba_") %>% 
         str_replace("_", ", ")) %>% 
-  gtsave("figures/Table_1.png", vwidth = 1100)
+  gtsave("figures/Table_2.png", vwidth = 1100)
 
 ```
 
@@ -3452,9 +3452,13 @@ ggsave("figures/Figure_2.pdf", singular_plot,
 
 ```
 
-### Figure 3 Daily patterns
+### Figure 3 Chronotype influence on light exposure timing
 
-```{r Fig3}
+This figure was added as part of revision 1 and can be found below under section @sec-fig-chronotype.
+
+### Figure 4 Daily patterns
+
+```{r Fig4}
 
 
 light_pattern <-
@@ -3543,16 +3547,16 @@ light_pattern_individuals$fv %>%
   plot_layout(guides = "collect")
 
 
-ggsave("figures/Figure_3.pdf", 
+ggsave("figures/Figure_4.pdf", 
        width = 17, height = 7, units = "cm", scale = 1.6)
 
 
 ```
 
 
-### Figure 4 Correlation Matrix
+### Figure 5 Correlation Matrix
 
-```{r Fig4}
+```{r Fig5}
 
 #visualization
 (corr_plot_malaysia + theme(legend.position = "none")) + 
@@ -3562,7 +3566,7 @@ ggsave("figures/Figure_3.pdf",
         legend.justification = c(1,1))
   
 
-ggsave("figures/Figure_4.pdf", 
+ggsave("figures/Figure_5.pdf", 
        width = 25, height = 17, units = "cm", scale = 1.6)
 
 ```
@@ -4083,7 +4087,7 @@ gam.check(m_pp2)
 
 From the model results we can see that for the light exposure overall, photoperiod has no mere parametric influence, but rather influences the pattern. Both raw data and modelled representation show a gradual extension towards longer exposure into the evening, while there is moderate extension into the morning. In all (photoperiod) cases, there are two pronounced high-points during the day, one around noon, and the second in the afternoon around 4 pm. Due to the noise in the data, this is better reflected in the model representation.
 
-### Chronotype effect
+### Chronotype effect {#sec-fig-chronotype}
 
 In this section, we look into the effect of chronotype on the timing of light exposure. Specifically the mean timing of light exposure above 250 lx melanopic EDI (MLiT250). We did not assess chronotype directly. However, questions in the PSQI refer to the timing of sleep, which can be used to calculate the mid-sleep.
 
@@ -4266,7 +4270,7 @@ MLiT250 |>
 
 CT_P1
 
-ggsave("figures/Figure_S6.pdf", 
+ggsave("figures/Figure_3.pdf", 
        width = 9, height = 6, units = "cm", scale = 1.6)
 
  MLiT250 <-
@@ -4382,8 +4386,8 @@ rbind(state_compliance, overall_compliance) |>
 
 compliance_table
 
-# compliance_table |>
-# gtsave("figures/Table_H7.png")
+compliance_table |>
+gtsave("figures/Table_1.png")
 
 ```
 
@@ -4483,7 +4487,7 @@ compliance_Plot2 /
   compliance_Plot1 + 
   plot_layout(axes = "collect") & theme(legend.position = "bottom")
 
-ggsave("figures/Figure_S7.pdf", 
+ggsave("figures/Figure_S6.pdf", 
        width = 14, height = 12, units = "cm", scale = 1.6)
 ```
 
